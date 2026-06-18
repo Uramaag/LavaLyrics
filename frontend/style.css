@@ -1,0 +1,153 @@
+:root {
+    --bg-dark: #0f172a;
+    --primary: #8b5cf6;
+    --primary-hover: #7c3aed;
+    --success: #10b981;
+    --success-hover: #059669;
+    --glass-bg: rgba(30, 41, 59, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --track-bg: rgba(0, 0, 0, 0.4);
+    --track-border: rgba(255, 255, 255, 0.05);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Inter', sans-serif;
+    color: var(--text-main);
+    background-color: var(--bg-dark);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow-x: hidden;
+    padding: 2rem;
+}
+
+.background-anim {
+    position: fixed; top: -50%; left: -50%; width: 200%; height: 200%;
+    background: radial-gradient(circle at 50% 50%, rgba(139, 92, 246, 0.15) 0%, rgba(15, 23, 42, 1) 50%);
+    animation: rotateBg 30s linear infinite; z-index: -1;
+}
+@keyframes rotateBg { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+.glass-panel {
+    background: var(--glass-bg); backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border); border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.container { width: 100%; max-width: 600px; padding: 2.5rem; }
+
+header { text-align: center; margin-bottom: 2.5rem; }
+header h1 { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 2.5rem; }
+header h1 span { color: var(--primary); }
+
+.input-group label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; }
+input[type="url"], input[type="number"], input[type="file"] {
+    background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+    padding: 12px 16px; color: white; width: 100%; outline: none; transition: 0.3s;
+}
+input:focus { border-color: var(--primary); }
+
+button { width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.3s; }
+.btn-primary { background-color: var(--primary); color: white; }
+.btn-primary:hover { background-color: var(--primary-hover); }
+.btn-success { background-color: var(--success); color: white; display: block; text-align: center; text-decoration: none; }
+.btn-secondary { background-color: rgba(255,255,255,0.1); color: white; }
+.btn-small { padding: 8px 12px; font-size: 0.8rem; width: auto; }
+.btn-icon { background: transparent; color: white; font-size: 1.5rem; width: auto; padding: 0 10px; }
+
+.status-msg { margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted); text-align: center; min-height: 20px; }
+.badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; background: rgba(255,255,255,0.1); }
+.badge.success { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+
+/* EDITOR LAYOUT */
+.editor-container { width: 100%; max-width: 1200px; display: flex; flex-direction: column; gap: 1rem; height: 90vh; }
+.editor-top { display: flex; gap: 1rem; flex: 1; min-height: 0; }
+.panel { padding: 1.5rem; display: flex; flex-direction: column; overflow-y: auto; }
+.tools-panel { flex: 1; min-width: 300px; }
+.preview-panel { flex: 2; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+
+.preview-area {
+    position: relative; width: 360px; height: 640px; /* 9:16 Tiktok Aspect Ratio */
+    background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 1rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+}
+#preview-video { width: 100%; height: 100%; object-fit: cover; }
+.preview-controls { display: flex; align-items: center; gap: 0.5rem; width: 100%; max-width: 360px; justify-content: center; }
+
+/* LYRICS VIRALES INSTAGRAM */
+.lyrics-overlay {
+    position: absolute; top: 0; left: 10%; right: 10%; bottom: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Montserrat', sans-serif; font-weight: 800;
+    color: white; pointer-events: none; padding: 20px; z-index: 10;
+    gap: 8px; text-align: center;
+}
+
+.lyric-line {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    opacity: 0; transform: translateY(10px); display: none;
+    text-transform: uppercase;
+    font-size: 22px; /* Más pequeño para safe zones */
+    text-align: center;
+    line-height: 1.2;
+}
+
+.lyric-past {
+    display: block; opacity: 0.5; transform: translateY(0);
+    text-shadow: 2px 2px 5px rgba(0,0,0,0.8);
+}
+
+.lyric-current {
+    display: block; opacity: 1; transform: translateY(0) scale(1.05); transform-origin: center center;
+    text-shadow: 0px 4px 15px rgba(0,0,0,1), 0px 0px 10px rgba(139, 92, 246, 0.5);
+    color: #ffffff;
+}
+
+.lyric-future {
+    display: block; opacity: 0; display: none;
+}
+
+/* CUT GUIDE LINE */
+.cut-guide {
+    position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255, 255, 255, 0.5);
+    border-left: 1px dashed white; pointer-events: none; z-index: 30; display: none;
+}
+.cut-mode .cut-guide { display: block; }
+
+/* TIMELINE */
+.timeline-panel { height: 280px; flex-shrink: 0; display: flex; flex-direction: column; padding: 1rem; }
+.timeline-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.timeline-container { position: relative; flex: 1; background: var(--track-bg); border-radius: 8px; overflow-x: auto; overflow-y: hidden; }
+
+/* REGLA DEL TIMELINE */
+.timeline-ruler { position: absolute; top: 0; left: 120px; right: 0; height: 20px; border-bottom: 1px solid var(--track-border); pointer-events: none; }
+.ruler-mark { position: absolute; top: 0; border-left: 1px solid rgba(255,255,255,0.2); height: 10px; font-size: 10px; padding-left: 2px; color: var(--text-muted); }
+
+.tracks { display: flex; flex-direction: column; padding-top: 20px; }
+.track-row { display: flex; align-items: center; height: 40px; border-bottom: 1px solid var(--track-border); }
+.track-label { width: 120px; font-size: 0.75rem; color: var(--text-muted); font-weight: bold; padding-left: 10px; position: sticky; left: 0; background: var(--bg-dark); z-index: 10; display: flex; align-items: center; height: 100%; border-right: 1px solid var(--track-border); }
+.track-content { flex: 1; position: relative; height: 100%; display: flex; align-items: center; width: 2000px; /* Ancho simulado dinámico en JS */ }
+
+.clip { height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold; color: white; position: absolute; user-select: none; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+.clip-video { background: linear-gradient(90deg, #3b82f6, #2563eb); border: 1px solid #60a5fa; cursor: grab; }
+.clip-lyrics { background: linear-gradient(90deg, #10b981, #059669); border: 1px solid #34d399; cursor: grab; }
+.clip-audio { background: linear-gradient(90deg, #8b5cf6, #7c3aed); border: 1px solid #a78bfa; cursor: grab; }
+
+/* Agarradera para redimensionar */
+.resize-handle { position: absolute; right: 0; top: 0; bottom: 0; width: 10px; background: rgba(255,255,255,0.3); cursor: ew-resize; border-top-right-radius: 4px; border-bottom-right-radius: 4px; z-index: 5; }
+.resize-handle-left { position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: rgba(255,255,255,0.3); cursor: ew-resize; border-top-left-radius: 4px; border-bottom-left-radius: 4px; z-index: 5; }
+.resize-handle:hover, .resize-handle-left:hover { background: rgba(255,255,255,0.6); }
+
+/* Playhead arrastrable */
+.playhead { position: absolute; top: 0; left: 120px; width: 2px; height: 100%; background: #ef4444; z-index: 20; cursor: ew-resize; }
+.playhead::before { content: ''; position: absolute; top: 0; left: -5px; width: 12px; height: 12px; background: #ef4444; border-radius: 50%; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+.playhead::after { content: ''; position: absolute; top: 0; left: -10px; width: 22px; height: 100%; background: transparent; }
+
+/* CUT MODE */
+.cut-mode .clip { cursor: crosshair !important; }
+.cut-mode .resize-handle, .cut-mode .resize-handle-left { pointer-events: none; }

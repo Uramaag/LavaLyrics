@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LavaLyrics - Creador de Videos Musicales</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-anim"></div>
+    
+    <!-- PANTALLA INICIAL: Introducir URL -->
+    <div id="intro-screen" class="container glass-panel">
+        <header>
+            <h1>Lava<span>Lyrics</span></h1>
+            <p>Genera clips virales con letras sincronizadas</p>
+        </header>
+
+        <div class="input-group" style="text-align: center;">
+            <label for="spotify-url" style="font-size: 1.2rem;">INTRODUCE AQUÍ LA URL DE SPOTIFY</label>
+            <input type="url" id="spotify-url" placeholder="https://open.spotify.com/track/..." required style="width: 100%; text-align: center; font-size: 1.2rem; padding: 16px;">
+        </div>
+        <button id="btn-extract" class="btn-primary" style="margin-top: 1.5rem; font-size: 1.2rem; padding: 16px;">Extraer Audio y Letras</button>
+        <div id="extract-status" class="status-msg"></div>
+        
+        <div id="recent-audios" style="margin-top: 2rem; display: none;">
+            <h3 style="font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 1rem;">Audios Recientes</h3>
+            <div id="recent-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <!-- Botones inyectados por JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- PANTALLA DE EDICIÓN: Estilo CapCut -->
+    <div id="editor-screen" class="editor-container" style="display: none;">
+        <div class="editor-top">
+            <!-- Izquierda: Propiedades y Archivos -->
+            <div class="panel tools-panel glass-panel">
+                <h2>Herramientas</h2>
+                
+                <div class="track-info" id="track-info">
+                    <h3 id="track-title">Canción</h3>
+                    <p id="track-artist">Artista</p>
+                    <span class="badge" id="lyrics-badge">Letras Sincronizadas: No</span>
+                </div>
+
+                <div class="input-group file-input-group" style="margin-top: 1rem;">
+                    <label for="bg-video">1. Sube un video de fondo (cualquier formato)</label>
+                    <input type="file" id="bg-video" accept="video/*">
+                </div>
+                
+                <p class="help-text" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+                    Sube un video. Si queda corto, puedes estirarlo o clonarlo en la línea de tiempo.
+                </p>
+
+                <div class="export-controls">
+                    <label for="export-duration">Duración total a exportar (s):</label>
+                    <input type="number" id="export-duration" value="15" min="1" step="0.1">
+                    <button id="btn-render" class="btn-primary" style="margin-top: 1rem;">Generar Video HD</button>
+                    <div id="render-status" class="status-msg"></div>
+                </div>
+                
+                <a id="btn-download" href="#" class="btn-success" download style="display:none; margin-top: 1rem;">Descargar Video (.MP4)</a>
+                <p id="download-hint" style="display:none; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">
+                    Para elegir dónde guardarlo, habilita "Preguntar dónde guardar" en la configuración de tu navegador. El formato siempre es MP4 (ideal para TikTok/Reels).
+                </p>
+            </div>
+
+            <!-- Derecha: Previsualización -->
+            <div class="panel preview-panel glass-panel">
+                <div class="preview-header">
+                    <h2>Previsualización</h2>
+                </div>
+                <div class="preview-area">
+                    <video id="preview-video" muted playsinline></video>
+                    <audio id="preview-audio" style="display:none;"></audio>
+                    <div id="preview-lyrics-overlay" class="lyrics-overlay"></div>
+                </div>
+                <div class="preview-controls">
+                    <button id="btn-back-5" class="btn-icon" title="Retroceder 5s">⏪</button>
+                    <button id="btn-play-pause" class="btn-icon">▶</button>
+                    <button id="btn-forward-frame" class="btn-icon" title="Adelantar fotograma">⏭</button>
+                    <button id="btn-forward-5" class="btn-icon" title="Adelantar 5s">⏩</button>
+                    <span id="time-display" style="font-size: 0.8rem;">00:00 / 00:00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Abajo: Línea de Tiempo -->
+        <div class="editor-bottom panel glass-panel timeline-panel">
+            <div class="timeline-header">
+                <h2>Línea de Tiempo</h2>
+                <div class="timeline-tools">
+                    <button id="btn-add-video" class="btn-secondary btn-small" disabled>+ Añadir bloque de video</button>
+                </div>
+            </div>
+            
+            <div class="timeline-container">
+                <div class="playhead" id="playhead"></div>
+                <div class="tracks">
+                    <!-- Pista 1: Video -->
+                    <div class="track-row">
+                        <div class="track-label">Pista 1 (Video)</div>
+                        <div class="track-content" id="track-video">
+                            <!-- Los bloques de video se añaden aquí -->
+                        </div>
+                    </div>
+                    <!-- Pista 2: Letras -->
+                    <div class="track-row">
+                        <div class="track-label">Pista 2 (Letras)</div>
+                        <div class="track-content" id="track-lyrics">
+                            <div class="clip clip-lyrics" style="width: 100%;">Toda la canción</div>
+                        </div>
+                    </div>
+                    <!-- Pista 3: Audio -->
+                    <div class="track-row">
+                        <div class="track-label">Pista 3 (Audio)</div>
+                        <div class="track-content" id="track-audio">
+                            <div class="clip clip-audio" style="width: 100%;">Audio descargado</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
