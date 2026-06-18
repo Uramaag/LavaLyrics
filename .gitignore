@@ -1,9 +1,40 @@
-__pycache__/
-*.pyc
-.venv/
-venv/
-env/
+# Dependencies
+client/node_modules/
+
+# Build outputs
+client/dist/
 dist/
-build/
-*.spec
+
+# Python
+server/__pycache__/
+server/*.pyc
+server/build/
+server/dist/
+
+# Data (downloads, renders)
+server/data/
+
+# Environment
+.env
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Project Runtime Data and Logs
 data/
+logs/
+Exports/
+test_spotify_out/
+test_extract_out/
+
+# Generated media and assets
+*.wav
+*.mp4
+*.lrc
+*.ass
