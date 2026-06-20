@@ -78,14 +78,12 @@ def shutdown_monitor():
     global last_keepalive
     while True:
         time.sleep(5)
-        if time.time() - last_keepalive > 15.0:
-            logger.info("No active clients detected for 15s. Interrupting services and shutting down...")
-            for render_id, proc in list(active_renders.items()):
-                try:
-                    logger.info(f"Terminating active render process: {render_id}")
-                    proc.kill()
-                except:
-                    pass
+        # Prevent shutdown if there are active render processes
+        if active_renders:
+            last_keepalive = time.time()
+            continue
+        if time.time() - last_keepalive > 1200.0:
+            logger.info("No active clients detected for 20 minutes. Interrupting services and shutting down...")
             os._exit(0)
 
 threading.Thread(target=shutdown_monitor, daemon=True).start()

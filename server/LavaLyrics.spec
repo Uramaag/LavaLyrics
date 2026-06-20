@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\Users\\USUARIO\\Documents\\Antigravity Projects\\LavaLyrics\\client\\dist', 'client/dist')],
+    datas=[('C:\\Users\\Xilito\\Documents\\Antigravity Projects\\LavaLyrics\\client\\dist', 'client/dist')],
     hiddenimports=['uvicorn', 'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto', 'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan', 'uvicorn.lifespan.on', 'fastapi', 'pydantic', 'starlette', 'spotdl', 'yt_dlp', 'ytmusicapi', 'pysubs2', 'imageio_ffmpeg', 'httpx', 'anyio'],
     hookspath=[],
     hooksconfig={},

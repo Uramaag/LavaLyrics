@@ -460,6 +460,8 @@ async def get_spotify_track_info(url: str, output_dir: str, on_progress=None):
                 if on_progress:
                     on_progress(12, f"Buscando audio en YouTube Music...")
                 video_id, thumbnail_url = await _resolve_ytmusic_video_id(artist_name, track_name)
+                if video_id:
+                    yt_url = f"https://www.youtube.com/watch?v={video_id}"
                 
             if not video_id:
                 if on_progress:
