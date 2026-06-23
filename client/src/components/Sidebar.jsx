@@ -223,15 +223,38 @@ export default function Sidebar({ videoRef, audioRef }) {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <div>
-                <label className="label" style={{ fontSize: '0.62rem', whiteSpace: 'nowrap' }}>Tamaño (px)</label>
+                <label className="label" style={{ fontSize: '0.62rem', whiteSpace: 'nowrap' }}>Tamaño actual (px)</label>
                 <input 
                   type="number" 
                   min="10"
                   max="120"
                   value={exportSettings.fontSize || 28}
                   onChange={e => setExportSettings({ fontSize: parseInt(e.target.value) || 28 })}
+                  style={{ padding: '6px 6px', fontSize: '0.78rem', width: '100%' }}
+                />
+              </div>
+              <div>
+                <label className="label" style={{ fontSize: '0.62rem', whiteSpace: 'nowrap' }}>Escala prev/next</label>
+                <input 
+                  type="number" 
+                  step="0.05"
+                  min="0.3"
+                  max="1.0"
+                  value={exportSettings.prevNextScale ?? 0.7}
+                  onChange={e => setExportSettings({ prevNextScale: parseFloat(e.target.value) || 0.7 })}
+                  style={{ padding: '6px 6px', fontSize: '0.78rem', width: '100%' }}
+                />
+              </div>
+              <div>
+                <label className="label" style={{ fontSize: '0.62rem', whiteSpace: 'nowrap' }}>Separación versos (px)</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  max="80"
+                  value={exportSettings.lyricGap ?? 16}
+                  onChange={e => setExportSettings({ lyricGap: parseInt(e.target.value) || 0 })}
                   style={{ padding: '6px 6px', fontSize: '0.78rem', width: '100%' }}
                 />
               </div>

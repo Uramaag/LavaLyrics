@@ -117,10 +117,7 @@ export default function LowerLeftTabs({ videoRef }) {
             {selectedVideoClip ? (
               <FiltersPanel clipId={selectedVideoClip.id} videoRef={videoRef} />
             ) : (
-              <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>🎨</div>
-                Selecciona un clip de <strong>video</strong> en la línea de tiempo para ajustar sus efectos y filtros de color.
-              </div>
+              <FiltersPanel clipId={null} videoRef={videoRef} draggableOnly />
             )}
           </div>
         )}

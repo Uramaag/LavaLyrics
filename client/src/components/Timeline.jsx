@@ -164,7 +164,7 @@ export default function Timeline({ videoRef, audioRef }) {
     masterTime, setMasterTime,
     pixelsPerSecond, setPixelsPerSecond,
     selectedClipId, setSelectedClipId,
-    updateTrack, saveHistory, addToast,
+    updateTrack, saveHistory, addToast, setClipFilters,
   } = useAppStore()
 
   const [isCutMode, setIsCutMode] = useState(false)
@@ -392,6 +392,32 @@ export default function Timeline({ videoRef, audioRef }) {
     }
   }, [pixelsPerSecond, setPixelsPerSecond])
 
+  // Drop handler for filter presets dragged from FiltersPanel
+  const handleFilterPresetDrop = (e, layerIndex) => {
+    e.preventDefault()
+    const raw = e.dataTransfer.getData('application/lava-filter-preset')
+    if (!raw) return
+    try {
+      const { presetName, filters } = JSON.parse(raw)
+      saveHistory()
+      const dropTime = timeFromX(e.clientX)
+      const newId = 'adj-' + Date.now()
+      const newClip = {
+        id: newId,
+        type: 'video',
+        clipType: 'adjustment',
+        start: Math.max(0, dropTime),
+        duration: 5,
+        layer: layerIndex,
+        mediaStart: 0,
+      }
+      updateTrack('video', [...tracks.video, newClip])
+      setClipFilters(newId, filters)
+      setSelectedClipId(newId)
+      addToast(`Capa de ajuste "${presetName}" añadida`, 'success')
+    } catch { /* ignore */ }
+  }
+
   const handleTrackClick = (e) => {
     if (e.target.closest('.clip') || e.target.closest('.playhead-head')) return
     const t = timeFromX(e.clientX)
@@ -557,6 +583,8 @@ export default function Timeline({ videoRef, audioRef }) {
                       layerIndex: index
                     })
                   }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleFilterPresetDrop(e, index)}
                 >
                   {layerClips.map(clip => (
                     <TimelineClip

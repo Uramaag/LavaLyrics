@@ -116,17 +116,23 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
   }
 
   // Estilos de fuentes dinámicos del inspector
-  const lyricStyle = {
+  const lyricGap = exportSettings.lyricGap ?? 16
+  const prevNextScale = exportSettings.prevNextScale ?? 0.7
+  const baseFontSize = exportSettings.fontSize || 28
+
+  const lyricBaseStyle = {
     letterSpacing: `${exportSettings.letterSpacing || 0}px`,
     lineHeight: exportSettings.lineHeight || 1.2,
+    textAlign: 'center',
+    width: '100%',
   }
   const currentLyricStyle = {
-    ...lyricStyle,
-    fontSize: `${exportSettings.fontSize || 28}px`
+    ...lyricBaseStyle,
+    fontSize: `${baseFontSize}px`,
   }
   const sideLyricStyle = {
-    ...lyricStyle,
-    fontSize: `${Math.round((exportSettings.fontSize || 28) * 0.7)}px`
+    ...lyricBaseStyle,
+    fontSize: `${Math.round(baseFontSize * prevNextScale)}px`,
   }
 
   // States for visual guides
@@ -307,8 +313,23 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
           {/* Hidden audio element */}
           <audio ref={audioRef} style={{ display: 'none' }} crossOrigin="anonymous" />
 
-          {/* Lyrics overlay */}
-          <div className="preview-lyrics-overlay" style={{ pointerEvents: 'none', zIndex: 9 }}>
+          {/* Lyrics overlay - centrado absoluto sobre el video */}
+          <div
+            className="preview-lyrics-overlay"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              zIndex: 9,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 16px',
+              gap: `${lyricGap}px`,
+              boxSizing: 'border-box',
+            }}
+          >
             {currentLyrics && (
               <>
                 {currentLyrics.past && (

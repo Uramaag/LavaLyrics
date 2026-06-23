@@ -133,10 +133,27 @@ export function usePreview({ videoRef, audioRef }) {
   }, [isPlaying, setIsPlaying])
 
   const seekTo = useCallback((t) => {
-    masterTimeRef.current = t
-    setMasterTime(t)
-    syncAtTime(t)
-  }, [setMasterTime, syncAtTime])
+    const clamped = Math.max(0, t)
+    masterTimeRef.current = clamped
+    setMasterTime(clamped)
+
+    // Si está reproduciendo, solo actualizar currentTime (no pausar/reproducir de nuevo)
+    if (isPlaying) {
+      const aBlock = getBlockAtTime(tracks.audio, clamped)
+      const vBlock = getBlockAtTime(tracks.video, clamped)
+      if (audioRef.current && aBlock && audioDuration > 0) {
+        const aTarget = aBlock.mediaStart + (clamped - aBlock.start)
+        audioRef.current.currentTime = Math.min(aTarget, audioDuration - 0.01)
+      }
+      if (videoRef.current && vBlock && bgVideoDuration > 0) {
+        const vTarget = vBlock.mediaStart + (clamped - vBlock.start)
+        videoRef.current.currentTime = Math.min(vTarget, bgVideoDuration - 0.01)
+      }
+    } else {
+      // Parado: sincronizar normalmente
+      syncAtTime(clamped)
+    }
+  }, [setMasterTime, syncAtTime, isPlaying, tracks, audioDuration, bgVideoDuration, audioRef, videoRef, getBlockAtTime])
 
   const stepForwardFrame = useCallback(() => {
     const t = masterTimeRef.current + (1 / 60)

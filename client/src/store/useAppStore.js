@@ -251,6 +251,8 @@ export const useAppStore = create((set, get) => ({
     fontSize: 28,
     letterSpacing: 0,
     lineHeight: 1.2,
+    lyricGap: 16,
+    prevNextScale: 0.7,
   },
   setExportSettings: (s) => {
     set((prev) => ({ exportSettings: { ...prev.exportSettings, ...s } }))
