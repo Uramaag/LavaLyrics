@@ -46,6 +46,43 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
 
   const [isVideoLoading, setIsVideoLoading] = useState(false)
 
+  // Zoom state - aplica solo al soltar el slider
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const [zoomOrigin, setZoomOrigin] = useState({ x: 0.5, y: 0.5 })
+  const pendingZoomRef = useRef(1)
+  const miniMapCanvasRef = useRef(null)
+  const miniMapContainerRef = useRef(null)
+  const isDraggingMiniRef = useRef(false)
+
+  // Animar el mini-mapa dibujando desde el video
+  useEffect(() => {
+    const canvas = miniMapCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    let rafId
+    const draw = () => {
+      const vid = videoRef.current
+      if (vid && vid.readyState >= 2 && vid.videoWidth > 0) {
+        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
+      } else {
+        ctx.fillStyle = '#0a0a0a'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+      }
+      rafId = requestAnimationFrame(draw)
+    }
+    draw()
+    return () => cancelAnimationFrame(rafId)
+  }, [videoRef])
+
+  // Handler para mover el zoom origin desde el mini-mapa
+  const handleMiniMapPointer = useCallback((e, container) => {
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
+    setZoomOrigin({ x, y })
+  }, [])
+
   // Set video src - reactive to previewQuality
   useEffect(() => {
     if (videoRef.current) {
@@ -204,7 +241,7 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
 
       <div className="preview-canvas-area" style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '16px 16px 8px', gap: '16px' }}>
         <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-          {/* Video */}
+          {/* Video con zoom aplicado */}
           <video
             ref={videoRef}
             muted
@@ -220,7 +257,10 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
               filter: activeVideoFilter(),
               objectFit: 'contain',
               borderRadius: 'var(--radius-md)',
-              boxShadow: 'var(--shadow-lg)'
+              boxShadow: 'var(--shadow-lg)',
+              transform: zoomLevel !== 1 ? `scale(${zoomLevel})` : undefined,
+              transformOrigin: `${zoomOrigin.x * 100}% ${zoomOrigin.y * 100}%`,
+              transition: 'transform 0.15s ease',
             }}
           />
 
@@ -349,6 +389,69 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
         {/* Real-time Decibel VU Meter Panel */}
         <VUMeter audioRef={audioRef} isPlaying={isPlaying} />
 
+        {/* Mini-map de zoom */}
+        {zoomLevel > 1 && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vista</span>
+            {/* Mini-mapa interactivo */}
+            <div
+              ref={miniMapContainerRef}
+              style={{
+                position: 'relative',
+                width: '80px',
+                height: '142px', // ~9:16
+                borderRadius: '6px',
+                overflow: 'hidden',
+                border: '1px solid var(--border-subtle)',
+                cursor: 'crosshair',
+                flexShrink: 0,
+              }}
+              onPointerDown={(e) => {
+                isDraggingMiniRef.current = true
+                e.currentTarget.setPointerCapture(e.pointerId)
+                handleMiniMapPointer(e, miniMapContainerRef.current)
+              }}
+              onPointerMove={(e) => {
+                if (!isDraggingMiniRef.current) return
+                handleMiniMapPointer(e, miniMapContainerRef.current)
+              }}
+              onPointerUp={() => { isDraggingMiniRef.current = false }}
+            >
+              {/* Canvas con frame del video */}
+              <canvas
+                ref={miniMapCanvasRef}
+                width={80}
+                height={142}
+                style={{ display: 'block', width: '100%', height: '100%' }}
+              />
+              {/* Rectángulo de zona de zoom */}
+              <div style={{
+                position: 'absolute',
+                border: '1.5px solid #f97316',
+                boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+                pointerEvents: 'none',
+                width: `${(1 / zoomLevel) * 100}%`,
+                height: `${(1 / zoomLevel) * 100}%`,
+                left: `${Math.max(0, Math.min(1 - 1/zoomLevel, zoomOrigin.x - 1/(2*zoomLevel))) * 100}%`,
+                top: `${Math.max(0, Math.min(1 - 1/zoomLevel, zoomOrigin.y - 1/(2*zoomLevel))) * 100}%`,
+              }} />
+              {/* Crosshair en el punto de origen */}
+              <div style={{
+                position: 'absolute',
+                width: '8px',
+                height: '8px',
+                border: '1.5px solid #fb923c',
+                borderRadius: '50%',
+                background: 'rgba(249,115,22,0.3)',
+                left: `calc(${zoomOrigin.x * 100}% - 4px)`,
+                top: `calc(${zoomOrigin.y * 100}% - 4px)`,
+                pointerEvents: 'none',
+              }} />
+            </div>
+            <span style={{ fontSize: '0.6rem', color: '#f97316', fontWeight: 'bold' }}>{zoomLevel.toFixed(1)}x</span>
+          </div>
+        )}
+
       </div>
 
       {/* Controls Bar - fuera del canvas para tener todo el ancho */}
@@ -374,6 +477,37 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
           <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '12px', whiteSpace: 'nowrap' }}>
             {formatTime(masterTime)} / {formatTime(totalTime)}
           </span>
+
+          {/* Zoom slider - aplica solo al soltar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: 'auto', flexShrink: 0 }}>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🔍</span>
+            <input
+              type="range"
+              min="1"
+              max="5"
+              step="0.1"
+              defaultValue="1"
+              style={{ width: '80px', accentColor: '#f97316', cursor: 'pointer' }}
+              onChange={(e) => { pendingZoomRef.current = parseFloat(e.target.value) }}
+              onPointerUp={(e) => {
+                const v = parseFloat(e.target.value)
+                pendingZoomRef.current = v
+                setZoomLevel(v)
+                if (v === 1) setZoomOrigin({ x: 0.5, y: 0.5 })
+              }}
+            />
+            <span style={{ fontSize: '0.65rem', color: '#f97316', fontWeight: 'bold', minWidth: '28px' }}>
+              {zoomLevel.toFixed(1)}x
+            </span>
+            {zoomLevel > 1 && (
+              <button
+                className="btn-icon"
+                style={{ height: '22px', width: '22px', fontSize: '0.6rem', flexShrink: 0, padding: 0 }}
+                title="Resetear zoom"
+                onClick={() => { setZoomLevel(1); setZoomOrigin({ x: 0.5, y: 0.5 }); pendingZoomRef.current = 1 }}
+              >✕</button>
+            )}
+          </div>
         </div>
       </div>
     </div>
