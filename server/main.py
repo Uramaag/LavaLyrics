@@ -53,9 +53,11 @@ else:
 
 DATA_DIR = os.path.join(WORK_DIR, "data")
 LOG_DIR = os.path.join(WORK_DIR, "logs")
+PROJECTS_DIR = os.path.join(WORK_DIR, "LavaLyricsProjects")
 
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(PROJECTS_DIR, exist_ok=True)
 
 import logging
 import time
@@ -100,6 +102,7 @@ jobs: Dict[str, Any] = {}
 
 # ── Cache ───────────────────────────────────────────────────────────────
 CACHE_FILE = os.path.join(DATA_DIR, "cache.json")
+SEARCH_CACHE_FILE = os.path.join(DATA_DIR, "search_cache.json")
 
 def load_cache():
     if os.path.exists(CACHE_FILE):
@@ -114,7 +117,21 @@ def save_cache(cache):
     with open(CACHE_FILE, "w") as f:
         json.dump(cache, f)
 
+def load_search_cache():
+    if os.path.exists(SEARCH_CACHE_FILE):
+        try:
+            with open(SEARCH_CACHE_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_search_cache(cache):
+    with open(SEARCH_CACHE_FILE, "w") as f:
+        json.dump(cache, f)
+
 url_cache = load_cache()
+search_cache = load_search_cache()
 
 # Restore completed jobs from cache on startup
 for url, cache_info in url_cache.items():
@@ -155,46 +172,77 @@ class OpenFolderRequest(BaseModel):
     path: Optional[str] = None
 
 # ── Project state persistence ──────────────────────────────────────────────
-STATE_FILE = os.path.join(DATA_DIR, "project_state.json")
-
 class ProjectState(BaseModel):
     state: dict
 
-@app.post("/api/project/state")
-async def save_project_state(req: ProjectState):
+@app.get("/api/projects")
+async def list_projects():
     try:
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
+        files = []
+        for f in os.listdir(PROJECTS_DIR):
+            if f.endswith(".lavalyrics"):
+                path = os.path.join(PROJECTS_DIR, f)
+                stat = os.stat(path)
+                name = os.path.splitext(f)[0]
+                # Try to load meta from the json
+                track_name = ""
+                artist_name = ""
+                try:
+                    with open(path, "r", encoding="utf-8") as file:
+                        data = json.load(file)
+                        track_name = data.get("trackName", "")
+                        artist_name = data.get("artistName", "")
+                except:
+                    pass
+                files.append({
+                    "name": name,
+                    "modified": stat.st_mtime,
+                    "size": stat.st_size,
+                    "track_name": track_name,
+                    "artist_name": artist_name
+                })
+        # Sort by last modified desc
+        files.sort(key=lambda x: x["modified"], reverse=True)
+        return {"projects": files}
+    except Exception as e:
+        logger.exception("Error listing projects:")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/projects/{name}")
+async def get_project(name: str):
+    path = os.path.join(PROJECTS_DIR, f"{name}.lavalyrics")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return {"state": data}
+        except Exception as e:
+            logger.error(f"Error loading project {name}: {e}")
+            return JSONResponse({"error": str(e)}, status_code=500)
+    return JSONResponse({"error": "Proyecto no encontrado"}, status_code=404)
+
+@app.post("/api/projects/{name}")
+async def save_project(name: str, req: ProjectState):
+    try:
+        path = os.path.join(PROJECTS_DIR, f"{name}.lavalyrics")
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(req.state, f, ensure_ascii=False, indent=2)
         return {"status": "ok"}
     except Exception as e:
-        logger.exception("Error saving project state:")
+        logger.exception(f"Error saving project {name}:")
         return JSONResponse({"error": str(e)}, status_code=500)
 
-@app.get("/api/project/state")
-async def get_project_state():
-    if os.path.exists(STATE_FILE):
+@app.delete("/api/projects/{name}")
+async def delete_project(name: str):
+    path = os.path.join(PROJECTS_DIR, f"{name}.lavalyrics")
+    if os.path.exists(path):
         try:
-            with open(STATE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            job_id = data.get("currentJobId")
-            if job_id:
-                job_dir = os.path.join(DATA_DIR, job_id)
-                if os.path.exists(job_dir):
-                    wav_files = [f for f in os.listdir(job_dir) if f.endswith(".wav")]
-                    if wav_files:
-                        return {"state": data}
+            os.remove(path)
+            return {"status": "ok"}
         except Exception as e:
-            logger.error(f"Error loading project state: {e}")
-    return {"state": None}
-
-@app.delete("/api/project/state")
-async def delete_project_state():
-    if os.path.exists(STATE_FILE):
-        try:
-            os.remove(STATE_FILE)
-        except Exception as e:
-            logger.error(f"Error deleting project state: {e}")
-    return {"status": "ok"}
+            logger.error(f"Error deleting project {name}: {e}")
+            return JSONResponse({"error": str(e)}, status_code=500)
+    return JSONResponse({"error": "Proyecto no encontrado"}, status_code=404)
 
 # ── Keep-alive ─────────────────────────────────────────────────────────────
 @app.post("/api/keepalive")
@@ -225,18 +273,52 @@ async def cancel_render(render_id: str):
 
 # ── Video stream ───────────────────────────────────────────────────────────
 @app.get("/api/video")
-async def get_video(path: str):
+async def get_video(path: str, quality: Optional[str] = "proxy"):
     if not path or not os.path.exists(path):
         return JSONResponse({"error": "Video no encontrado"}, status_code=404)
+    
+    if quality == "proxy":
+        dir_name = os.path.dirname(path)
+        base_name = os.path.basename(path)
+        proxy_path = os.path.join(dir_name, f"proxy_{base_name}")
+        if os.path.exists(proxy_path):
+            return FileResponse(proxy_path, media_type="video/mp4")
+            
     return FileResponse(path, media_type="video/mp4")
 
 # ── Search ───────────────────────────────────────────────────────────────
 @app.get("/api/search")
 async def search_songs(q: str = ""):
-    if not q.strip():
+    query_clean = q.strip().lower()
+    if not query_clean:
         return {"results": []}
     try:
-        results = await search_tracks(q)
+        # Check query cache
+        if query_clean in search_cache:
+            results = search_cache[query_clean]
+        else:
+            results = await search_tracks(q)
+            # Store raw results in search cache
+            search_cache[query_clean] = results
+            save_search_cache(search_cache)
+            
+        # Dynamically check download cache to add live badge markers
+        for r in results:
+            url_val = r.get("spotify_url") or r.get("url")
+            is_downloaded = False
+            missing_lyrics = False
+            
+            if url_val in url_cache:
+                entry = url_cache[url_val]
+                cached_job_id = entry if isinstance(entry, str) else entry.get("job_id")
+                if cached_job_id in jobs and jobs[cached_job_id].get("status") == "completed":
+                    is_downloaded = True
+                    data = jobs[cached_job_id].get("data", {})
+                    missing_lyrics = not bool(data.get("lrc_path"))
+            
+            r["is_downloaded"] = is_downloaded
+            r["missing_lyrics"] = missing_lyrics
+            
         return {"results": results}
     except Exception as e:
         logger.error(f"Search failed for query '{q}': {e}")
@@ -271,7 +353,11 @@ async def extract_audio(req: ExtractRequest):
                 save_cache(url_cache)
             except Exception as e:
                 logger.exception(f"Extraction failed for URL {req.url}:")
-                jobs[job_id] = {"status": "error", "error": str(e)}
+                jobs[job_id] = {
+                    "status": "error", 
+                    "error": str(e),
+                    "code": getattr(e, "code", "ERR_EXTRACT_FAILED")
+                }
 
         threading.Thread(target=extractor_task, daemon=True).start()
         return {"job_id": job_id}
@@ -305,6 +391,28 @@ async def get_recent_audios():
     return {"recent": list(reversed(recent))}
 
 # ── Upload background ─────────────────────────────────────────────────────
+def generate_video_proxy(original_path: str, proxy_path: str):
+    import imageio_ffmpeg
+    import subprocess
+    try:
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        # Scale to 480p height, strip audio with -an for super fast decoding
+        cmd = [
+            ffmpeg_exe, "-y",
+            "-i", original_path,
+            "-vf", "scale=-2:480",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "30",
+            "-an",
+            proxy_path
+        ]
+        logger.info(f"Generating video proxy: {' '.join(cmd)}")
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        logger.info(f"Video proxy generated successfully at {proxy_path}")
+    except Exception as e:
+        logger.error(f"Failed to generate video proxy: {e}")
+
 @app.post("/api/upload_bg")
 async def upload_bg(file: UploadFile = File(...)):
     try:
@@ -316,10 +424,15 @@ async def upload_bg(file: UploadFile = File(...)):
         with open(file_path, "wb") as buf:
             shutil.copyfileobj(file.file, buf)
         logger.info(f"Background video uploaded successfully: {file_path}")
+        
+        # Start proxy generation thread
+        proxy_path = os.path.join(bg_dir, f"proxy_{bg_id}_{safe_name}")
+        threading.Thread(target=generate_video_proxy, args=(file_path, proxy_path), daemon=True).start()
+        
         return {"bg_id": bg_id, "file_path": file_path}
     except Exception as e:
         logger.exception("Failed to upload background video:")
-        return JSONResponse({"error": f"Error al subir el video: {str(e)}"}, status_code=500)
+        return JSONResponse({"error": f"Error al subir el video: {str(e)}", "code": "ERR_UPLOAD_FAILED"}, status_code=500)
 
 # ── Render ─────────────────────────────────────────────────────────────────
 @app.post("/api/render")

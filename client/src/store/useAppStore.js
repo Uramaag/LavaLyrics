@@ -12,14 +12,15 @@ const triggerAutoSave = (get, set) => {
   clearTimeout(autoSaveTimeout)
   autoSaveTimeout = setTimeout(async () => {
     const state = get()
-    if (!state.currentJobId) return
+    if (!state.projectName) return
     set({ savingStatus: 'saving' })
     try {
-      await fetch('/api/project/state', {
+      await fetch(`/api/projects/${encodeURIComponent(state.projectName)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           state: {
+            projectName: state.projectName,
             currentJobId: state.currentJobId,
             trackName: state.trackName,
             artistName: state.artistName,
@@ -31,6 +32,7 @@ const triggerAutoSave = (get, set) => {
             tracks: state.tracks,
             clipFilters: state.clipFilters,
             exportSettings: state.exportSettings,
+            audioWavemap: state.audioWavemap || [],
           }
         })
       })
@@ -54,13 +56,27 @@ export const useAppStore = create((set, get) => ({
   progressStep: '',
   setProgress: (pct, step) => set({ progressPct: pct, progressStep: step }),
 
-  // ── Job / Track info ─────────────────────────────────────
+  // ── Toasts ───────────────────────────────────────────────
+  toasts: [],
+  addToast: (message, type = 'info', code = '') => {
+    const id = Date.now() + Math.random()
+    set(s => ({ toasts: [...s.toasts, { id, message, type, code }] }))
+    setTimeout(() => {
+      set(s => ({ toasts: s.toasts.filter(t => t.id !== id) }))
+    }, 4500)
+  },
+  removeToast: (id) => set(s => ({ toasts: s.toasts.filter(t => t.id !== id) })),
+
+  // ── Project / Job / Track info ───────────────────────────
+  projectName: '',
+  setProjectName: (name) => set({ projectName: name }),
   currentJobId: null,
   trackName: '',
   artistName: '',
   hasLyrics: false,
-  setJobData: (jobId, trackName, artistName, hasLyrics) => {
-    set({ currentJobId: jobId, trackName, artistName, hasLyrics })
+  audioWavemap: [],
+  setJobData: (jobId, trackName, artistName, hasLyrics, wavemap = []) => {
+    set({ currentJobId: jobId, trackName, artistName, hasLyrics, audioWavemap: wavemap })
     triggerAutoSave(get, set)
   },
 
@@ -190,18 +206,32 @@ export const useAppStore = create((set, get) => ({
 
   // ── Load full project state ──────────────────────────────
   loadProjectState: (projState) => {
+    // Determine the maximum layer index inside project to ensure we load enough layers
+    let maxLayer = 1
+    if (projState.tracks && projState.tracks.video) {
+      projState.tracks.video.forEach(c => {
+        if ((c.layer || 0) > maxLayer) maxLayer = c.layer
+      })
+    }
+    const currentStoredLayers = parseInt(localStorage.getItem('lavalyrics_layers_count') || "2")
+    if (maxLayer + 1 > currentStoredLayers) {
+      localStorage.setItem('lavalyrics_layers_count', (maxLayer + 1).toString())
+    }
+
     set({
-      currentJobId: projState.currentJobId,
-      trackName: projState.trackName,
-      artistName: projState.artistName,
-      hasLyrics: projState.hasLyrics,
-      audioDuration: projState.audioDuration,
-      bgVideoPath: projState.bgVideoPath,
-      bgVideoDuration: projState.bgVideoDuration,
-      parsedLyrics: projState.parsedLyrics,
+      projectName: projState.projectName || '',
+      currentJobId: projState.currentJobId || null,
+      trackName: projState.trackName || '',
+      artistName: projState.artistName || '',
+      hasLyrics: projState.hasLyrics || false,
+      audioDuration: projState.audioDuration || 0,
+      bgVideoPath: projState.bgVideoPath || null,
+      bgVideoDuration: projState.bgVideoDuration || 0,
+      parsedLyrics: projState.parsedLyrics || [],
       tracks: projState.tracks || { audio: [], video: [], lyrics: [] },
       clipFilters: projState.clipFilters || {},
       exportSettings: projState.exportSettings || { resolution: '1080x1920', inPoint: 0, outPoint: 15 },
+      audioWavemap: projState.audioWavemap || [],
       screen: 'editor',
       masterTime: 0,
       isPlaying: false,
@@ -218,6 +248,8 @@ export const useAppStore = create((set, get) => ({
     resolution: '1080x1920',
     inPoint: 0,
     outPoint: 15,
+    fontSize: 28,
+    letterSpacing: 0,
   },
   setExportSettings: (s) => {
     set((prev) => ({ exportSettings: { ...prev.exportSettings, ...s } }))
@@ -239,12 +271,11 @@ export const useAppStore = create((set, get) => ({
 
   // ── Reset to intro ────────────────────────────────────────
   resetToIntro: () => {
-    // Delete state file on backend when resetting / starting a new project
-    fetch('/api/project/state', { method: 'DELETE' }).catch(() => {})
     set({
       screen: 'intro',
       progressPct: 0,
       progressStep: '',
+      projectName: '',
       currentJobId: null,
       trackName: '',
       artistName: '',

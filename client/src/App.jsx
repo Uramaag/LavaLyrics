@@ -13,8 +13,9 @@ const screenVariants = {
 
 export default function App() {
   const screen = useAppStore(s => s.screen)
-  const { undo, redo, loadProjectState } = useAppStore()
-  const [restoreData, setRestoreData] = useState(null)
+  const toasts = useAppStore(s => s.toasts)
+  const removeToast = useAppStore(s => s.removeToast)
+  const { undo, redo } = useAppStore()
 
   // 1. Keep-Alive Heartbeat
   useEffect(() => {
@@ -51,18 +52,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [undo, redo])
 
-  // 3. Project state check on mount
-  useEffect(() => {
-    fetch('/api/project/state')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.state) {
-          setRestoreData(data.state)
-        }
-      })
-      .catch(() => {})
-  }, [])
-
   return (
     <>
       <AnimatePresence mode="wait">
@@ -83,44 +72,55 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Restore progress modal */}
-      {restoreData && (
-        <div className="modal-overlay" style={{ zIndex: 1000 }}>
-          <motion.div
-            className="modal-box"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            style={{ maxWidth: 450 }}
-          >
-            <h2>¿Restaurar progreso anterior?</h2>
-            <p style={{ margin: '12px 0 20px 0', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-              Se encontró una sesión anterior de <strong>{restoreData.trackName || 'Canción'}</strong> por {restoreData.artistName || 'Artista'}. ¿Deseas restaurar tu progreso y seguir editando?
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                className="btn-secondary"
-                onClick={async () => {
-                  try {
-                    await fetch('/api/project/state', { method: 'DELETE' })
-                  } catch {}
-                  setRestoreData(null)
-                }}
-              >
-                Descartar
-              </button>
-              <button
-                className="btn-primary"
-                onClick={() => {
-                  loadProjectState(restoreData)
-                  setRestoreData(null)
-                }}
-              >
-                Restaurar Progreso
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      {/* Toasts System Container */}
+      <div className="toasts-wrapper">
+        <AnimatePresence>
+          {toasts.map(toast => (
+            <motion.div
+              key={toast.id}
+              className={`toast-item ${toast.type}`}
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.9 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            >
+              <div className="toast-header-row">
+                <div className="toast-title">
+                  {toast.type === 'error' ? '❌ Error' : toast.type === 'success' ? '🚀 Éxito' : 'ℹ️ Info'}
+                  {toast.code && <span className="toast-code">{toast.code}</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button 
+                    className="toast-copy" 
+                    title="Copiar detalles"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const txt = `[${toast.type.toUpperCase()}] ${toast.code ? toast.code + ': ' : ''}${toast.message}`;
+                      navigator.clipboard.writeText(txt);
+                    }}
+                    style={{
+                      background: 'rgba(255,255,255,0.08)',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      fontSize: '0.7rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    📋 Copiar
+                  </button>
+                  <button className="toast-close" onClick={() => removeToast(toast.id)} style={{ position: 'relative', top: 'auto', right: 'auto' }}>✕</button>
+                </div>
+              </div>
+              <div className="toast-message">{toast.message}</div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </>
   )
 }

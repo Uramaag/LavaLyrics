@@ -19,7 +19,7 @@ function parseLRC(lrcText) {
 }
 
 export default function IntroScreen() {
-  const { setScreen, setProgress, setJobData, setParsedLyrics, updateTrack, setAudioDuration } = useAppStore()
+  const { setScreen, setProgress, setJobData, setParsedLyrics, updateTrack, setAudioDuration, addToast, loadProjectState } = useAppStore()
 
   const [urlValue, setUrlValue] = useState('')
   const [status, setStatus] = useState('')
@@ -31,18 +31,40 @@ export default function IntroScreen() {
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [showResults, setShowResults] = useState(false)
+  const [hideNoLyrics, setHideNoLyrics] = useState(false)
   const searchDebounce = useRef(null)
 
-  // Recents (Downloads Library)
-  const [recents, setRecents] = useState([])
-  const [sidebarFilter, setSidebarFilter] = useState('')
+  // Projects list
+  const [projects, setProjects] = useState([])
+  const [projectFilter, setProjectFilter] = useState('')
+
+  // New project modal state
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [orientation, setOrientation] = useState('vertical') // 'vertical' | 'horizontal'
+  const [resolution, setResolution] = useState('1080x1920') // '1080x1920' | '1920x1080'
+  const [fps, setFps] = useState('30')
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch('/api/projects')
+      const d = await res.json()
+      setProjects(d.projects || [])
+    } catch {}
+  }
 
   useEffect(() => {
-    fetch('/api/recent')
-      .then(r => r.json())
-      .then(d => setRecents(d.recent || []))
-      .catch(() => {})
+    fetchProjects()
   }, [])
+
+  // Auto-adjust resolution when orientation changes
+  useEffect(() => {
+    if (orientation === 'vertical') {
+      setResolution('1080x1920')
+    } else {
+      setResolution('1920x1080')
+    }
+  }, [orientation])
 
   // Search debounce
   useEffect(() => {
@@ -70,7 +92,7 @@ export default function IntroScreen() {
     setSearchQuery(`${item.title} — ${item.artist}`)
     setShowResults(false)
     // Auto-trigger extract
-    setTimeout(() => extractFromUrl(val), 100)
+    setTimeout(() => extractFromUrl(val, `${item.artist} - ${item.title}`), 100)
   }
 
   async function pollStatus(jobId, onProgress) {
@@ -80,7 +102,11 @@ export default function IntroScreen() {
           const res = await fetch(`/api/status/${jobId}`)
           const data = await res.json()
           if (data.status === 'completed') return resolve(data)
-          if (data.status === 'error') return reject(new Error(data.error || 'Error desconocido'))
+          if (data.status === 'error') {
+            const err = new Error(data.error || 'Error desconocido')
+            err.code = data.code || 'ERR_EXTRACT_FAILED'
+            return reject(err)
+          }
           if (onProgress) onProgress(data.progress || 0, data.step || 'Procesando...')
           setTimeout(tick, 1500)
         } catch (e) {
@@ -91,67 +117,89 @@ export default function IntroScreen() {
     })
   }
 
-  async function loadCachedSong(jobId, trackName, artistName, hasLrc) {
+  // Load an existing .lavalyrics project
+  const loadExistingProject = async (projectName) => {
     setIsExtracting(true)
-    setIsError(false)
-    setStatus('')
     setScreen('progress')
-    setProgress(30, 'Cargando audio desde caché...')
-
+    setProgress(20, 'Cargando archivo de proyecto...')
     try {
-      setJobData(jobId, trackName, artistName, hasLrc)
-
-      // Load audio duration
-      const audioEl = new Audio(`/api/data/${jobId}/audio`)
-      await new Promise((resolve, reject) => {
-        audioEl.onloadedmetadata = () => {
-          const dur = audioEl.duration
-          setAudioDuration(dur)
-          updateTrack('audio', [{
-            id: 'audio-main',
-            type: 'audio',
-            start: 0,
-            duration: dur,
-            mediaStart: 0,
-          }])
-          resolve()
-        }
-        audioEl.onerror = () => {
-          reject(new Error("No se pudo cargar el archivo de audio. Verifica que exista y que el servidor esté activo."))
-        }
-      })
-
-      // Load lyrics
-      if (hasLrc) {
-        setProgress(70, 'Cargando letras desde caché...')
-        try {
-          const lyrRes = await fetch(`/api/data/${jobId}/lyrics`)
-          if (lyrRes.ok) {
-            const lyrData = await lyrRes.json()
-            const parsed = parseLRC(lyrData.lyrics)
-            setParsedLyrics(parsed)
-            updateTrack('lyrics', [{
-              id: 'lyrics-main',
-              type: 'lyrics',
-              start: 0,
-              duration: audioEl.duration || 180,
-              mediaStart: 0,
-            }])
-          }
-        } catch {}
-      }
-
-      setProgress(100, '¡Cargado con éxito! ⚡')
-      setTimeout(() => setScreen('editor'), 400)
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectName)}`)
+      if (!res.ok) throw new Error('No se pudo cargar el proyecto')
+      const d = await res.json()
+      loadProjectState(d.state)
+      setProgress(100, 'Proyecto cargado ⚡')
     } catch (err) {
       setScreen('intro')
-      setStatus('Error al cargar audio desde caché')
-      setIsError(true)
+      addToast(err.message, 'error', 'ERR_PROJECT_LOAD_FAILED')
+    } finally {
       setIsExtracting(false)
     }
   }
 
-  async function extractFromUrl(url) {
+  // Delete an existing project
+  const deleteProject = async (e, projectName) => {
+    e.stopPropagation()
+    if (!confirm(`¿Estás seguro de que deseas eliminar el proyecto "${projectName}"?`)) return
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectName)}`, { method: 'DELETE' })
+      if (res.ok) {
+        addToast('Proyecto eliminado con éxito', 'success')
+        fetchProjects()
+      } else {
+        throw new Error()
+      }
+    } catch {
+      addToast('No se pudo eliminar el proyecto', 'error', 'ERR_PROJECT_DELETE_FAILED')
+    }
+  }
+
+  // Create an empty project
+  const handleCreateEmptyProject = async () => {
+    const trimmedName = newProjectName.trim()
+    if (!trimmedName) {
+      addToast('Ingresa un nombre para el proyecto', 'error', 'ERR_INVALID_NAME')
+      return
+    }
+
+    const initialProjectState = {
+      projectName: trimmedName,
+      currentJobId: null,
+      trackName: '',
+      artistName: '',
+      hasLyrics: false,
+      audioDuration: 0,
+      bgVideoPath: null,
+      bgVideoDuration: 0,
+      parsedLyrics: [],
+      tracks: { audio: [], video: [], lyrics: [] },
+      clipFilters: {},
+      exportSettings: {
+        resolution: resolution,
+        orientation: orientation,
+        fps: parseInt(fps),
+        inPoint: 0,
+        outPoint: 30
+      }
+    }
+
+    try {
+      const saveRes = await fetch(`/api/projects/${encodeURIComponent(trimmedName)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: initialProjectState })
+      })
+      if (!saveRes.ok) throw new Error()
+      
+      loadProjectState(initialProjectState)
+      setShowNewProjectModal(false)
+      addToast('Proyecto en blanco creado', 'success')
+    } catch {
+      addToast('Error al inicializar el proyecto en el disco', 'error', 'ERR_PROJECT_SAVE_FAILED')
+    }
+  }
+
+  // Extract lyrics and create project automatically
+  async function extractFromUrl(url, defaultProjName = 'Nuevo Proyecto') {
     if (!url) {
       setStatus('Ingresa una URL de Spotify o término de búsqueda.'); setIsError(true); return
     }
@@ -177,65 +225,106 @@ export default function IntroScreen() {
         finalData.job_id = data.job_id
       }
 
-      if (finalData.status !== 'completed') throw new Error(finalData.error)
+      if (finalData.status !== 'completed') {
+        const err = new Error(finalData.error || 'Error de extracción')
+        err.code = finalData.code || 'ERR_EXTRACT_FAILED'
+        throw err
+      }
 
-      const { track_name, artist_name, lrc_path, job_id } = finalData.data || finalData
-      setJobData(job_id || data.job_id, track_name, artist_name, !!lrc_path)
-
+      const { track_name, artist_name, lrc_path, job_id, heatmap } = finalData.data || finalData
+      
       // Load audio duration
       const audioEl = new Audio(`/api/data/${job_id || data.job_id}/audio`)
+      let dur = 180
       await new Promise((resolve, reject) => {
         audioEl.onloadedmetadata = () => {
-          const dur = audioEl.duration
-          setAudioDuration(dur)
-          updateTrack('audio', [{
+          dur = audioEl.duration
+          resolve()
+        }
+        audioEl.onerror = () => {
+          reject(new Error("No se pudo leer la duración del audio descargado."))
+        }
+      })
+
+      // Load lyrics content if available
+      let parsed = []
+      if (lrc_path) {
+        try {
+          const lyrRes = await fetch(`/api/data/${job_id || data.job_id}/lyrics`)
+          if (lyrRes.ok) {
+            const lyrData = await lyrRes.json()
+            parsed = parseLRC(lyrData.lyrics)
+          }
+        } catch {}
+      }
+
+      // Initialize auto-created project state
+      const cleanedProjName = `${artist_name} - ${track_name}`.replace(/[\\/*?:"<>|]/g, "")
+      const initialProjectState = {
+        projectName: cleanedProjName,
+        currentJobId: job_id || data.job_id,
+        trackName: track_name,
+        artistName: artist_name,
+        audioWavemap: heatmap || [],
+        hasLyrics: !!lrc_path,
+        audioDuration: dur,
+        bgVideoPath: null,
+        bgVideoDuration: 0,
+        parsedLyrics: parsed,
+        tracks: {
+          audio: [{
             id: 'audio-main',
             type: 'audio',
             start: 0,
             duration: dur,
             mediaStart: 0,
-          }])
-          resolve()
-        }
-        audioEl.onerror = () => {
-          reject(new Error("No se pudo cargar el archivo de audio. Verifica que exista y que el servidor esté activo."))
-        }
-      })
-
-      // Load lyrics
-      try {
-        const lyrRes = await fetch(`/api/data/${job_id || data.job_id}/lyrics`)
-        if (lyrRes.ok) {
-          const lyrData = await lyrRes.json()
-          const parsed = parseLRC(lyrData.lyrics)
-          setParsedLyrics(parsed)
-          updateTrack('lyrics', [{
+          }],
+          video: [],
+          lyrics: lrc_path ? [{
             id: 'lyrics-main',
             type: 'lyrics',
             start: 0,
-            duration: audioEl.duration || 180,
+            duration: dur,
             mediaStart: 0,
-          }])
+          }] : []
+        },
+        clipFilters: {},
+        exportSettings: {
+          resolution: '1080x1920',
+          orientation: 'vertical',
+          fps: 30,
+          inPoint: 0,
+          outPoint: Math.min(30, dur)
         }
-      } catch {}
+      }
 
+      // Save initial project state on disk
+      await fetch(`/api/projects/${encodeURIComponent(cleanedProjName)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: initialProjectState })
+      })
+
+      loadProjectState(initialProjectState)
       setProgress(100, '¡Listo!')
-      setTimeout(() => setScreen('editor'), 600)
+      addToast('Proyecto inicializado y audio importado', 'success')
     } catch (err) {
       setScreen('intro')
-      setStatus(err.message || 'Error al extraer')
-      setIsError(true)
+      addToast(err.message || 'Error al descargar la pista', 'error', err.code || 'ERR_EXTRACT_FAILED')
       setIsExtracting(false)
     }
   }
 
   const handleExtract = () => extractFromUrl(urlValue)
 
-  // Filter recents
-  const filteredRecents = recents.filter(r => 
-    r.title.toLowerCase().includes(sidebarFilter.toLowerCase()) || 
-    r.artist.toLowerCase().includes(sidebarFilter.toLowerCase())
+  // Filter projects
+  const filteredProjects = projects.filter(p => 
+    p.name.toLowerCase().includes(projectFilter.toLowerCase()) || 
+    (p.track_name && p.track_name.toLowerCase().includes(projectFilter.toLowerCase())) ||
+    (p.artist_name && p.artist_name.toLowerCase().includes(projectFilter.toLowerCase()))
   )
+
+  const filteredSearchResults = hideNoLyrics ? searchResults.filter(r => r.has_lyrics) : searchResults
 
   return (
     <div className="intro-root">
@@ -309,6 +398,20 @@ export default function IntroScreen() {
               {isSearching && <span className="search-spinner" />}
             </div>
 
+            {/* Sync Filter Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', paddingLeft: '4px' }}>
+              <input 
+                id="hide-no-lyrics-checkbox"
+                type="checkbox" 
+                checked={hideNoLyrics} 
+                onChange={e => setHideNoLyrics(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: 'var(--lava-red)', cursor: 'pointer' }}
+              />
+              <label htmlFor="hide-no-lyrics-checkbox" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                Ocultar canciones sin letras sincronizadas
+              </label>
+            </div>
+
             <AnimatePresence>
               {showResults && (
                 <motion.div
@@ -318,8 +421,8 @@ export default function IntroScreen() {
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.2 }}
                 >
-                  {searchResults.length > 0 ? (
-                    searchResults.map((r, i) => (
+                  {filteredSearchResults.length > 0 ? (
+                    filteredSearchResults.map((r, i) => (
                       <button
                         key={i}
                         className="search-result-item"
@@ -336,6 +439,16 @@ export default function IntroScreen() {
                               {r.title}
                             </span>
                             <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
+                              {r.is_downloaded && (
+                                <span className="search-result-badge" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                                  ✓ YA DESCARGADA
+                                </span>
+                              )}
+                              {r.is_downloaded && r.missing_lyrics && (
+                                <span className="search-result-badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                                  ⚠️ FALTAN LOS LYRICS
+                                </span>
+                              )}
                               <span className={`search-result-badge ${r.source}`}>
                                 {r.source === 'yt_music' ? '🎵 YT Music' : r.source === 'youtube' ? '🎥 YouTube' : r.source === 'soundcloud' ? '☁️ SoundCloud' : '🟢 Spotify'}
                               </span>
@@ -368,62 +481,167 @@ export default function IntroScreen() {
           </div>
         </motion.div>
 
-        {/* Sidebar Downloads */}
+        {/* Sidebar Projects */}
         <motion.div
           className="sidebar-downloads"
           initial={{ opacity: 0, x: 40 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.1, ease: [0.4, 0, 0.2, 1] }}
         >
-          <div className="sidebar-header">
-            <h3>Descargas Previas</h3>
-            <span className="sidebar-count">{filteredRecents.length}</span>
+          <div className="sidebar-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3>Tus Proyectos</h3>
+              <span className="sidebar-count">{filteredProjects.length}</span>
+            </div>
+            
+            <button 
+              className="btn-primary" 
+              style={{ padding: '8px 12px', fontSize: '0.82rem', width: '100%' }}
+              onClick={() => setShowNewProjectModal(true)}
+            >
+              + Nuevo Proyecto Vacío
+            </button>
           </div>
-          <p className="sidebar-desc">Tus audios y letras listos para editar al instante</p>
           
-          <div className="sidebar-search-wrap">
+          <div className="sidebar-search-wrap" style={{ marginTop: '12px' }}>
             <span className="sidebar-search-icon">🔍</span>
             <input
               type="text"
-              placeholder="Buscar en tu biblioteca..."
-              value={sidebarFilter}
-              onChange={e => setSidebarFilter(e.target.value)}
+              placeholder="Buscar proyectos..."
+              value={projectFilter}
+              onChange={e => setProjectFilter(e.target.value)}
               disabled={isExtracting}
             />
           </div>
 
-          <div className="sidebar-list">
-            {filteredRecents.length > 0 ? (
-              filteredRecents.map((r, i) => (
-                <button
+          <div className="sidebar-list" style={{ marginTop: '8px' }}>
+            {filteredProjects.length > 0 ? (
+              filteredProjects.map((p, i) => (
+                <div
                   key={i}
                   className="sidebar-item"
-                  onClick={() => loadCachedSong(r.job_id, r.title, r.artist, !!r.lrc_path)}
-                  disabled={isExtracting}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', cursor: 'pointer' }}
+                  onClick={() => loadExistingProject(p.name)}
                 >
-                  {r.thumbnail ? (
-                    <img className="sidebar-item-thumb" src={r.thumbnail} alt="" />
-                  ) : (
-                    <div className="sidebar-item-thumb-placeholder">🎵</div>
-                  )}
-                  <div className="sidebar-item-info">
-                    <div className="sidebar-item-name">{r.title}</div>
-                    <div className="sidebar-item-artist">
-                      {r.artist} {r.lrc_path && <span className="lrc-indicator">📝 Letra</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, overflow: 'hidden' }}>
+                    <div className="sidebar-item-thumb-placeholder">🗂️</div>
+                    <div className="sidebar-item-info" style={{ overflow: 'hidden' }}>
+                      <div className="sidebar-item-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                        {p.name}
+                      </div>
+                      <div className="sidebar-item-artist" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                        {p.track_name ? `${p.track_name} — ${p.artist_name}` : 'Proyecto en blanco'}
+                      </div>
                     </div>
                   </div>
-                  <span className="sidebar-item-arrow">→</span>
-                </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <button 
+                      className="btn-ghost" 
+                      style={{ padding: '4px 8px', color: 'var(--lava-red)', fontSize: '0.9rem' }}
+                      onClick={(e) => deleteProject(e, p.name)}
+                    >
+                      🗑️
+                    </button>
+                    <span className="sidebar-item-arrow">→</span>
+                  </div>
+                </div>
               ))
             ) : (
               <div className="sidebar-empty">
-                {sidebarFilter ? 'Ningún audio coincide' : 'Biblioteca vacía'}
+                {projectFilter ? 'Ningún proyecto coincide' : 'No tienes proyectos guardados'}
               </div>
             )}
           </div>
         </motion.div>
 
       </div>
+
+      {/* New Project Modal */}
+      {showNewProjectModal && (
+        <div className="modal-overlay" style={{ zIndex: 10000 }}>
+          <motion.div 
+            className="modal-box" 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            style={{ maxWidth: 460, padding: '24px' }}
+          >
+            <h2 style={{ fontSize: '1.3rem', marginBottom: '16px' }}>Configurar Nuevo Proyecto</h2>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
+              <div>
+                <label className="label">Nombre del Proyecto</label>
+                <input 
+                  type="text" 
+                  placeholder="Mi Video Viral"
+                  value={newProjectName}
+                  onChange={e => setNewProjectName(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label className="label">Orientación</label>
+                  <select 
+                    value={orientation} 
+                    onChange={e => setOrientation(e.target.value)}
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', padding: '10px', borderRadius: 'var(--radius-md)', width: '100%', outline: 'none' }}
+                  >
+                    <option value="vertical">Vertical (9:16)</option>
+                    <option value="horizontal">Horizontal (16:9)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Resolución</label>
+                  <select 
+                    value={resolution} 
+                    onChange={e => setResolution(e.target.value)}
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', padding: '10px', borderRadius: 'var(--radius-md)', width: '100%', outline: 'none' }}
+                  >
+                    {orientation === 'vertical' ? (
+                      <>
+                        <option value="1080x1920">1080 x 1920 (TikTok/Reels)</option>
+                        <option value="720x1280">720 x 1280 (SD Vertical)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="1920x1080">1920 x 1080 (YouTube/HD)</option>
+                        <option value="1280x720">1280 x 720 (SD Horizontal)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Tasa de Fotogramas (FPS)</label>
+                <select 
+                  value={fps} 
+                  onChange={e => setFps(e.target.value)}
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', padding: '10px', borderRadius: 'var(--radius-md)', width: '100%', outline: 'none' }}
+                >
+                  <option value="30">30 FPS (Recomendado)</option>
+                  <option value="60">60 FPS (Ultra fluido)</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button 
+                className="btn-secondary" 
+                onClick={() => setShowNewProjectModal(false)}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn-primary" 
+                onClick={handleCreateEmptyProject}
+              >
+                Crear Proyecto
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }

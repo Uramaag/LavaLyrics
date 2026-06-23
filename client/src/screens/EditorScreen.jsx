@@ -1,8 +1,10 @@
-import { useRef, useCallback } from 'react'
+import { useRef } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import Sidebar from '../components/Sidebar'
 import PreviewPanel from '../components/PreviewPanel'
 import Timeline from '../components/Timeline'
+import LowerLeftTabs from '../components/LowerLeftTabs'
+import ResizableLayout from '../components/ResizableLayout'
 import ExportModal from '../components/ExportModal'
 import ExportProgressModal from '../components/ExportProgressModal'
 import SuccessModal from '../components/SuccessModal'
@@ -10,7 +12,7 @@ import '../styles/editor.css'
 
 export default function EditorScreen() {
   const {
-    trackName, artistName, hasLyrics,
+    projectName, trackName, artistName, hasLyrics,
     exportModalOpen, renderProgressOpen, successModalOpen,
     setExportModalOpen, savingStatus, resetToIntro,
   } = useAppStore()
@@ -19,9 +21,9 @@ export default function EditorScreen() {
   const audioRef = useRef(null)
 
   return (
-    <div className="editor-root">
+    <div className="editor-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Top bar */}
-      <header className="editor-topbar">
+      <header className="editor-topbar" style={{ height: '56px', flexShrink: 0 }}>
         <div className="editor-topbar-left" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div className="logo-container" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div className="logo">
@@ -32,19 +34,22 @@ export default function EditorScreen() {
             </div>
           </div>
           <div className="track-meta" style={{ display: 'flex', flexDirection: 'column' }}>
-            <span className="track-name">{trackName}</span>
-            <span className="track-artist">{artistName}</span>
+            <span className="track-name" style={{ fontWeight: 'bold' }}>{projectName}</span>
+            <span className="track-artist" style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+              {trackName ? `${trackName} — ${artistName}` : 'Proyecto en blanco'}
+            </span>
           </div>
-          {hasLyrics
-            ? <span className="badge badge-success">Letras ✓</span>
-            : <span className="badge badge-warning">Sin letras</span>
-          }
+          {trackName && (
+            hasLyrics
+              ? <span className="badge badge-success">Letras ✓</span>
+              : <span className="badge badge-warning">Sin letras</span>
+          )}
         </div>
         <div className="editor-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             className="btn-secondary"
             onClick={() => {
-              if (confirm('¿Estás seguro de que deseas regresar al inicio? Esto descartará el proyecto actual.')) {
+              if (confirm('¿Estás seguro de que deseas regresar al inicio? Tu proyecto está autoguardado en el disco.')) {
                 resetToIntro()
               }
             }}
@@ -57,20 +62,20 @@ export default function EditorScreen() {
             className="btn-primary"
             onClick={() => setExportModalOpen(true)}
             style={{ padding: '10px 22px' }}
+            disabled={!trackName}
           >
             Exportar →
           </button>
         </div>
       </header>
 
-      {/* Workspace */}
-      <div className="editor-workspace">
-        <Sidebar videoRef={videoRef} audioRef={audioRef} />
-        <PreviewPanel videoRef={videoRef} audioRef={audioRef} />
-      </div>
-
-      {/* Timeline */}
-      <Timeline videoRef={videoRef} audioRef={audioRef} />
+      {/* 4-Quadrant Resizable Layout */}
+      <ResizableLayout
+        topLeft={<Sidebar videoRef={videoRef} audioRef={audioRef} />}
+        topRight={<PreviewPanel videoRef={videoRef} audioRef={audioRef} />}
+        bottomLeft={<LowerLeftTabs videoRef={videoRef} />}
+        bottomRight={<Timeline videoRef={videoRef} audioRef={audioRef} />}
+      />
 
       {/* Modals */}
       {exportModalOpen && <ExportModal videoRef={videoRef} audioRef={audioRef} />}

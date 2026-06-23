@@ -37,8 +37,7 @@ export function usePreview({ videoRef, audioRef }) {
       if (vBlock && bgVideoDuration > 0) {
         videoRef.current.style.opacity = '1'
         const vTarget = vBlock.mediaStart + (time - vBlock.start)
-        if (!isVideoSeeking.current && Math.abs(videoRef.current.currentTime - vTarget) > 0.25) {
-          isVideoSeeking.current = true
+        if (Math.abs(videoRef.current.currentTime - vTarget) > 0.15) {
           videoRef.current.currentTime = Math.min(vTarget, bgVideoDuration - 0.01)
         }
         if (isPlaying && videoRef.current.paused) {
@@ -57,12 +56,19 @@ export function usePreview({ videoRef, audioRef }) {
         audioRef.current.muted = false
         audioRef.current.volume = 1
         const aTarget = aBlock.mediaStart + (time - aBlock.start)
-        if (!isAudioSeeking.current && Math.abs(audioRef.current.currentTime - aTarget) > 0.25) {
-          isAudioSeeking.current = true
+        
+        if (Math.abs(audioRef.current.currentTime - aTarget) > 0.1) {
           audioRef.current.currentTime = Math.min(aTarget, audioDuration - 0.01)
         }
-        if (isPlaying && audioRef.current.paused) {
-          audioRef.current.play().catch(() => {})
+        
+        if (isPlaying) {
+          if (audioRef.current.paused) {
+            audioRef.current.play().catch(() => {})
+          }
+        } else {
+          if (!audioRef.current.paused) {
+            audioRef.current.pause()
+          }
         }
       } else {
         audioRef.current.volume = 0
@@ -103,27 +109,22 @@ export function usePreview({ videoRef, audioRef }) {
       rafRef.current = requestAnimationFrame(loop)
     }
 
-    videoRef.current?.play().catch(() => {})
-    audioRef.current?.play().catch(() => {})
+    if (videoRef.current && isPlaying) videoRef.current.play().catch(() => {})
+    if (audioRef.current && isPlaying) audioRef.current.play().catch(() => {})
 
     rafRef.current = requestAnimationFrame(loop)
 
     return () => cancelAnimationFrame(rafRef.current)
-  }, [isPlaying, audioDuration]) // eslint-disable-line
+  }, [isPlaying, audioDuration, syncAtTime]) // eslint-disable-line
 
   // When paused, sync
   useEffect(() => {
     if (!isPlaying) {
-      videoRef.current?.pause()
-      audioRef.current?.pause()
+      if (videoRef.current) videoRef.current.pause()
+      if (audioRef.current) audioRef.current.pause()
       syncAtTime(masterTime)
     }
-  }, [masterTime, isPlaying]) // eslint-disable-line
-
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.onseeked = () => { isVideoSeeking.current = false }
-    if (audioRef.current) audioRef.current.onseeked = () => { isAudioSeeking.current = false }
-  }, [videoRef, audioRef])
+  }, [masterTime, isPlaying, syncAtTime])
 
   const togglePlay = useCallback(() => {
     setIsPlaying(!isPlaying)

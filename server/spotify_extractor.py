@@ -6,6 +6,13 @@ import re
 import asyncio
 import urllib.parse
 from urllib.parse import quote, unquote
+import syncedlyrics
+from syncedlyrics.providers.musixmatch import Musixmatch
+
+class ExtractionError(Exception):
+    def __init__(self, message, code="ERR_EXTRACT_FAILED"):
+        super().__init__(message)
+        self.code = code
 
 def _init_spotify_client():
     pass
@@ -173,6 +180,54 @@ def normalize_string(s: str) -> str:
     s = re.sub(r'\s+', ' ', s)
     return s.strip()
 
+async def _search_musixmatch(query: str):
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        def _run():
+            provider = Musixmatch()
+            r = provider._get(
+                "track.search",
+                [
+                    ("q", query),
+                    ("page_size", "10"),
+                    ("page", "1"),
+                ],
+            )
+            if not r.ok:
+                return []
+            body = r.json().get("message", {}).get("body", {})
+            if not body or not isinstance(body, dict):
+                return []
+            track_list = body.get("track_list", [])
+            results = []
+            for item in track_list:
+                t = item.get("track", {})
+                track_name = t.get("track_name")
+                artist_name = t.get("artist_name")
+                has_subtitles = t.get("has_subtitles", 0)
+                has_lyrics = t.get("has_lyrics", 0)
+                
+                encoded_title = quote(track_name)
+                encoded_artist = quote(artist_name)
+                fake_url = f"https://open.spotify.com/track/QUERY__TITLE-{encoded_title}__ARTIST-{encoded_artist}__SRC-musixmatch"
+                
+                results.append({
+                    "title": track_name,
+                    "artist": artist_name,
+                    "spotify_url": fake_url,
+                    "url": fake_url,
+                    "duration": _fmt_duration(t.get("track_length", 0)),
+                    "thumbnail": "",
+                    "source": "spotify",
+                    "has_lyrics": bool(has_subtitles or has_lyrics)
+                })
+            return results
+        return await loop.run_in_executor(None, _run)
+    except Exception as e:
+        print("musixmatch search failed:", e)
+        return []
+
 async def _search_lrclib(query: str):
     try:
         async with httpx.AsyncClient(
@@ -215,14 +270,15 @@ async def _search_lrclib(query: str):
 
 async def search_tracks(query: str):
     """
-    Search songs in parallel using YouTube Music, YouTube Search, SoundCloud and LrcLib,
+    Search songs in parallel using YouTube Music, YouTube Search, SoundCloud, LrcLib and Musixmatch,
     and merge/prioritize them.
     """
-    results_ytmusic, results_ytdlp, results_soundcloud, results_lrclib = await asyncio.gather(
+    results_ytmusic, results_ytdlp, results_soundcloud, results_lrclib, results_musixmatch = await asyncio.gather(
         _search_ytmusic(query),
         _search_ytdlp_search(query),
         _search_soundcloud(query),
         _search_lrclib(query),
+        _search_musixmatch(query),
         return_exceptions=True
     )
     
@@ -230,10 +286,11 @@ async def search_tracks(query: str):
     if isinstance(results_ytdlp, Exception): results_ytdlp = []
     if isinstance(results_soundcloud, Exception): results_soundcloud = []
     if isinstance(results_lrclib, Exception): results_lrclib = []
+    if isinstance(results_musixmatch, Exception): results_musixmatch = []
     
-    # Build a lookup set of normalized (title, artist) that have synced lyrics in LrcLib
+    # Build a lookup set of normalized (title, artist) that have synced lyrics in LrcLib or Musixmatch
     synced_lyrics_set = set()
-    for item in results_lrclib:
+    for item in results_lrclib + results_musixmatch:
         if item.get("has_lyrics"):
             norm_t = normalize_string(item["title"])
             norm_a = normalize_string(item["artist"])
@@ -269,6 +326,13 @@ async def search_tracks(query: str):
             
     # 2. Spotify / LrcLib tracks (exact metadata from lyrics database)
     for item in results_lrclib[:8]:
+        key = f"{item['title']}-{item['artist']}".lower()
+        if key not in seen_keys:
+            seen_keys.add(key)
+            combined.append(process_item(item))
+            
+    # 2.5. Musixmatch tracks
+    for item in results_musixmatch[:8]:
         key = f"{item['title']}-{item['artist']}".lower()
         if key not in seen_keys:
             seen_keys.add(key)
@@ -549,9 +613,9 @@ async def get_spotify_track_info(url: str, output_dir: str, on_progress=None):
         if wav_files:
             os.rename(os.path.join(output_dir, wav_files[0]), audio_path)
         else:
-            raise Exception("No se pudo generar el archivo de audio. Verifica tu conexión a internet o la URL.")
+            raise ExtractionError("No se pudo generar el archivo de audio. Verifica tu conexión a internet o la URL.", code="ERR_AUDIO_DOWNLOAD_FAILED")
             
-    # 3. Fetch Synced Lyrics from lrclib.net
+    # 3. Fetch Synced Lyrics from lrclib.net / Musixmatch
     if on_progress:
         on_progress(75, "Obteniendo letras sincronizadas...")
         
@@ -561,6 +625,7 @@ async def get_spotify_track_info(url: str, output_dir: str, on_progress=None):
             headers={"User-Agent": "LavaLyrics/2.0 (https://github.com/Uramaag/LavaLyrics)"},
             timeout=10,
         ) as client:
+            # Query standard API
             res = await client.get(
                 f"https://lrclib.net/api/get?track_name={quote(track_name)}&artist_name={quote(artist_name)}"
             )
@@ -569,6 +634,16 @@ async def get_spotify_track_info(url: str, output_dir: str, on_progress=None):
                 lrc_content = data.get("syncedLyrics")
                 
             if not lrc_content:
+                # Fuzzy fallback 1: Clean track name and search
+                clean_track = re.sub(r'\s*[\(\[][Ff]eat\..*?[\)\]]', '', track_name).strip()
+                res = await client.get(
+                    f"https://lrclib.net/api/get?track_name={quote(clean_track)}&artist_name={quote(artist_name)}"
+                )
+                if res.status_code == 200:
+                    lrc_content = res.json().get("syncedLyrics")
+
+            if not lrc_content:
+                # Fuzzy fallback 2: Search term query
                 search_q = quote(f"{artist_name} {track_name}")
                 res = await client.get(f"https://lrclib.net/api/search?q={search_q}")
                 if res.status_code == 200:
@@ -577,7 +652,22 @@ async def get_spotify_track_info(url: str, output_dir: str, on_progress=None):
                             lrc_content = r["syncedLyrics"]
                             break
     except Exception as e:
-        print("Lyrics fetch failed:", e)
+        print("LrcLib fetch failed, falling back to Musixmatch...", e)
+
+    # Musixmatch fallback via syncedlyrics
+    if not lrc_content:
+        if on_progress:
+            on_progress(80, "Buscando letras en Musixmatch...")
+        try:
+            loop = asyncio.get_event_loop()
+            # Clean search query for syncedlyrics providers
+            q = f"{artist_name} - {re.sub(r'\\s*[\\(\\[][Ff]eat\\..*?[\\)\\]]', '', track_name).strip()}"
+            lrc_content = await loop.run_in_executor(
+                None,
+                lambda: syncedlyrics.search(q, providers=["Musixmatch", "LrcLib"])
+            )
+        except Exception as e:
+            print("Musixmatch fetch failed via syncedlyrics:", e)
         
     lrc_path = None
     if lrc_content:

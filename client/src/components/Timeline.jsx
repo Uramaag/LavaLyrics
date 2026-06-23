@@ -1,13 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useTimeline } from '../hooks/useTimeline'
+import ImportAudioModal from './ImportAudioModal'
 
-const TRACK_DEFS = [
-  { name: 'audio_lyrics', label: 'Audio & Letras', locked: true  },
-  { name: 'video',        label: 'Video',          locked: false },
-]
-
-function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, isSelected, onContextMenu }) {
+function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, isSelected, onContextMenu, videoLayersCount, onMoveLayer }) {
   const { moveClip, resizeClipLeft, resizeClipRight, cutClip } = useTimeline()
   const dragState = useRef(null)
 
@@ -17,27 +13,43 @@ function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, i
     dragState.current = {
       action,
       startX: e.clientX,
+      startY: e.clientY,
       initialStart: clip.start,
       initialDuration: clip.duration,
       initialMediaStart: clip.mediaStart,
+      initialLayer: clip.layer || 0,
       moved: false,
     }
 
     const onMove = (me) => {
       if (!dragState.current) return
       const diffPx = me.clientX - dragState.current.startX
-      if (Math.abs(diffPx) > 3) dragState.current.moved = true
+      const diffPy = me.clientY - dragState.current.startY
+      if (Math.abs(diffPx) > 3 || Math.abs(diffPy) > 3) dragState.current.moved = true
       if (!dragState.current.moved) return
 
-      const diffTime = diffPx / pixelsPerSecond
-      const { action, initialStart, initialDuration } = dragState.current
-      const mappedTrack = trackName === 'audio_lyrics' ? 'audio' : trackName
+      const { action, initialStart, initialDuration, initialLayer } = dragState.current
+      const mappedTrack = trackName.startsWith('video') ? 'video' : (trackName === 'audio_lyrics' ? 'audio' : trackName)
 
       if (action === 'move') {
+        const diffTime = diffPx / pixelsPerSecond
         moveClip(mappedTrack, clip.id, initialStart + diffTime)
+        
+        // Mover verticalmente entre capas si es un clip de video
+        if (mappedTrack === 'video' && onMoveLayer) {
+          // Altura estimada de fila de track es ~42px
+          const rowHeight = 42
+          const layerShift = -Math.round(diffPy / rowHeight) // Hacia arriba disminuye y (pero incrementa índice de capa ya que 0 está abajo)
+          const targetLayer = Math.max(0, Math.min(videoLayersCount - 1, initialLayer + layerShift))
+          if (targetLayer !== clip.layer) {
+            onMoveLayer(clip.id, targetLayer - (clip.layer || 0))
+          }
+        }
       } else if (action === 'resize-right') {
+        const diffTime = diffPx / pixelsPerSecond
         resizeClipRight(mappedTrack, clip.id, initialStart + initialDuration + diffTime)
       } else if (action === 'resize-left') {
+        const diffTime = diffPx / pixelsPerSecond
         resizeClipLeft(mappedTrack, clip.id, initialStart + diffTime)
       }
     }
@@ -50,10 +62,10 @@ function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, i
 
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
-  }, [clip, trackName, pixelsPerSecond, isCutMode, moveClip, resizeClipLeft, resizeClipRight])
+  }, [clip, trackName, pixelsPerSecond, isCutMode, moveClip, resizeClipLeft, resizeClipRight, videoLayersCount, onMoveLayer])
 
   const handleClick = (e) => {
-    const mappedTrack = trackName === 'audio_lyrics' ? 'audio' : trackName
+    const mappedTrack = trackName.startsWith('video') ? 'video' : (trackName === 'audio_lyrics' ? 'audio' : trackName)
     if (isCutMode) {
       const rect = e.currentTarget.getBoundingClientRect()
       const clickTime = (e.clientX - rect.left) / pixelsPerSecond
@@ -69,36 +81,39 @@ function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, i
   const width = clip.duration * pixelsPerSecond
 
   if (trackName === 'audio_lyrics') {
+    const audioWavemap = useAppStore(s => s.audioWavemap || [])
+    
     return (
       <div
         className={`clip clip-audio-lyrics${isSelected ? ' selected' : ''}`}
-        style={{ left, width: Math.max(width, 30) }}
+        style={{ left, width: Math.max(width, 30), overflow: 'hidden' }}
         onMouseDown={(e) => handleMouseDown(e, 'move')}
         onClick={handleClick}
         onContextMenu={(e) => onContextMenu(e, clip.id, trackName)}
       >
-        {/* Left resize handle */}
         <div
           className="resize-handle-left"
           onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'resize-left') }}
           onClick={e => e.stopPropagation()}
         />
         
-        {/* Split container visually representing Audio (top) and Letras (bottom) */}
-        <div className="clip-split-container">
-          <div className="clip-split-top">
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div className="clip-split-container" style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {/* Waveform Canvas Overlay in the Audio section */}
+          <div className="clip-split-top" style={{ position: 'relative', overflow: 'hidden', height: '50%' }}>
+            {audioWavemap.length > 0 && (
+              <WaveformCanvas wavemap={audioWavemap} duration={clip.duration} />
+            )}
+            <span style={{ position: 'relative', zIndex: 2, textShadow: '0 1px 2px rgba(0,0,0,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               🎵 Audio ({clip.duration.toFixed(1)}s)
             </span>
           </div>
-          <div className="clip-split-bottom">
+          <div className="clip-split-bottom" style={{ height: '50%' }}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              📝 Letras
+              📝 Letras Sincronizadas
             </span>
           </div>
         </div>
 
-        {/* Right resize handle */}
         <div
           className="resize-handle-right"
           onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'resize-right') }}
@@ -124,7 +139,7 @@ function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, i
         onClick={e => e.stopPropagation()}
       />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', pointerEvents: 'none', paddingLeft: '6px' }}>
-        {clip.type === 'video' ? '🎬 Video' : clip.type === 'lyrics' ? '📝 Letras' : '🎵 Audio'}
+        🎬 Video
       </span>
       <div
         className="resize-handle-right"
@@ -147,10 +162,25 @@ export default function Timeline({ videoRef, audioRef }) {
   const [isCutMode, setIsCutMode] = useState(false)
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false)
   const [cutGuideX, setCutGuideX] = useState(null)
-  const [contextMenu, setContextMenu] = useState(null) // { x, y, clipId, trackName }
+  const [contextMenu, setContextMenu] = useState(null) // { x, y, clipId, trackName, layerIndex }
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+
+  // videoLayersCount state linked directly to storage and updated reactively
+  const [videoLayersCount, setVideoLayersCount] = useState(2)
+
+  useEffect(() => {
+    const val = localStorage.getItem('lavalyrics_layers_count')
+    setVideoLayersCount(val ? parseInt(val) : 2)
+  }, [tracks]) // Syncs when tracks change (like loading project)
+
+  const addVideoLayer = () => {
+    const nextCount = videoLayersCount + 1
+    setVideoLayersCount(nextCount)
+    localStorage.setItem('lavalyrics_layers_count', nextCount.toString())
+  }
 
   const copiedType = window.__copiedClip?.type
-  const isTargetVideo = contextMenu?.trackName === 'video'
+  const isTargetVideo = contextMenu?.trackName.startsWith('video')
   const isTargetAudioLyrics = contextMenu?.trackName === 'audio_lyrics'
   const canPaste = !!(window.__copiedClip && (
     (isTargetVideo && copiedType === 'video') ||
@@ -158,7 +188,7 @@ export default function Timeline({ videoRef, audioRef }) {
   ))
 
   const containerRef = useRef(null)
-  const LABEL_WIDTH = 90
+  const LABEL_WIDTH = 110
 
   useEffect(() => {
     const handleClose = () => setContextMenu(null)
@@ -166,30 +196,62 @@ export default function Timeline({ videoRef, audioRef }) {
     return () => window.removeEventListener('click', handleClose)
   }, [])
 
+  // Keyboard shortcut Ctrl+Shift+D to duplicate selected clip ahead
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        if (!selectedClipId) return
+        
+        // Find which track has the selected clip
+        let foundTrack = null
+        let foundClip = null
+        for (const tname of ['video', 'audio']) {
+          const c = tracks[tname].find(clip => clip.id === selectedClipId)
+          if (c) {
+            foundTrack = tname
+            foundClip = c
+            break
+          }
+        }
+        if (foundClip && foundTrack) {
+          handleDuplicate(foundClip.id, foundTrack, true)
+          // Automatically select the new duplicate so the user can chain Ctrl+Shift+D repeatedly!
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedClipId, tracks])
+
   const handleCopy = (clipId, trackName) => {
-    const mappedTrack = trackName === 'audio_lyrics' ? 'audio' : trackName
+    const mappedTrack = trackName.startsWith('video') ? 'video' : (trackName === 'audio_lyrics' ? 'audio' : trackName)
     const clip = tracks[mappedTrack].find(c => c.id === clipId)
     if (clip) {
-      window.__copiedClip = { ...clip }
+      window.__copiedClip = JSON.parse(JSON.stringify(clip))
+      addToast('Clip copiado al portapapeles', 'info')
     }
   }
 
   const handleCut = (clipId, trackName) => {
-    const mappedTrack = trackName === 'audio_lyrics' ? 'audio' : trackName
+    saveHistory()
+    const mappedTrack = trackName.startsWith('video') ? 'video' : (trackName === 'audio_lyrics' ? 'audio' : trackName)
     const clip = tracks[mappedTrack].find(c => c.id === clipId)
     if (clip) {
-      window.__copiedClip = { ...clip }
+      window.__copiedClip = JSON.parse(JSON.stringify(clip))
       if (mappedTrack === 'audio') {
         updateTrack('audio', tracks.audio.filter(c => c.id !== clipId))
         updateTrack('lyrics', tracks.lyrics.filter(c => c.id !== clipId))
       } else {
         updateTrack(mappedTrack, tracks[mappedTrack].filter(c => c.id !== clipId))
       }
+      addToast('Clip cortado al portapapeles', 'info')
     }
   }
 
-  const handlePaste = (trackName) => {
-    const mappedTrack = trackName === 'audio_lyrics' ? 'audio' : trackName
+  const handlePaste = (trackName, layerIndex) => {
+    saveHistory()
+    const mappedTrack = trackName.startsWith('video') ? 'video' : (trackName === 'audio_lyrics' ? 'audio' : trackName)
     if (!window.__copiedClip) return
     const randId = Math.random()
     if (mappedTrack === 'audio') {
@@ -204,9 +266,53 @@ export default function Timeline({ videoRef, audioRef }) {
       updateTrack('audio', [...tracks.audio, newAudio])
       updateTrack('lyrics', [...tracks.lyrics, newLyrics])
     } else {
-      const newClip = { ...window.__copiedClip, id: 'clip-paste-' + randId, start: masterTime }
+      const newClip = { ...window.__copiedClip, id: 'clip-paste-' + randId, start: masterTime, layer: layerIndex }
       updateTrack(mappedTrack, [...tracks[mappedTrack], newClip])
     }
+  }
+
+  const handleDuplicate = (clipId, trackName, ahead = false) => {
+    saveHistory()
+    const mappedTrack = trackName.startsWith('video') ? 'video' : (trackName === 'audio_lyrics' ? 'audio' : trackName)
+    const clip = tracks[mappedTrack].find(c => c.id === clipId)
+    if (!clip) return
+    
+    const randId = Math.random()
+    if (mappedTrack === 'audio') {
+      const newStart = ahead ? (clip.start + clip.duration) : clip.start
+      const audioId = 'audio-dup-' + randId
+      const newAudio = { ...clip, id: audioId, start: newStart }
+      const newLyrics = {
+        id: 'lyrics-dup-' + randId,
+        type: 'lyrics',
+        start: newStart,
+        duration: clip.duration,
+        mediaStart: clip.mediaStart,
+      }
+      updateTrack('audio', [...tracks.audio, newAudio])
+      updateTrack('lyrics', [...tracks.lyrics, newLyrics])
+      setSelectedClipId(audioId)
+    } else {
+      const newStart = ahead ? (clip.start + clip.duration) : clip.start
+      const videoId = 'clip-dup-' + randId
+      const newClip = { ...clip, id: videoId, start: newStart }
+      updateTrack(mappedTrack, [...tracks[mappedTrack], newClip])
+      setSelectedClipId(videoId)
+    }
+  }
+
+  // Layer movement helpers for context menu
+  const moveClipLayer = (clipId, dir) => {
+    saveHistory()
+    const updated = tracks.video.map(c => {
+      if (c.id === clipId) {
+        const currentLayer = c.layer || 0
+        const targetLayer = Math.max(0, Math.min(videoLayersCount - 1, currentLayer + dir))
+        return { ...c, layer: targetLayer }
+      }
+      return c
+    })
+    updateTrack('video', updated)
   }
 
   // Total visible duration
@@ -231,7 +337,6 @@ export default function Timeline({ videoRef, audioRef }) {
     return Math.max(0, x / pixelsPerSecond)
   }, [pixelsPerSecond])
 
-  // Native scroll wheel handler to prevent browser page-zoom and enable horizontal HMR zoom
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -249,14 +354,12 @@ export default function Timeline({ videoRef, audioRef }) {
     }
   }, [pixelsPerSecond, setPixelsPerSecond])
 
-  // Click on track to seek
   const handleTrackClick = (e) => {
     if (e.target.closest('.clip') || e.target.closest('.playhead-head')) return
     const t = timeFromX(e.clientX)
     setMasterTime(t)
   }
 
-  // Playhead drag
   const handlePlayheadMouseDown = (e) => {
     e.stopPropagation()
     setIsDraggingPlayhead(true)
@@ -270,7 +373,6 @@ export default function Timeline({ videoRef, audioRef }) {
     window.addEventListener('mouseup', onUp)
   }
 
-  // Cut mode guide
   const handleMouseMove = (e) => {
     if (isCutMode && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect()
@@ -278,21 +380,38 @@ export default function Timeline({ videoRef, audioRef }) {
     }
   }
 
+  // Create list of video layer specs (from top to bottom layer)
+  const videoLayerRows = []
+  for (let i = videoLayersCount - 1; i >= 0; i--) {
+    videoLayerRows.push({
+      index: i,
+      name: `video_${i}`,
+      label: `Capa Video ${i + 1}`
+    })
+  }
+
   return (
-    <div className="timeline-panel">
+    <div className="timeline-panel" style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
       {/* Header */}
-      <div className="timeline-header">
+      <div className="timeline-header" style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(0,0,0,0.15)', height: '42px', alignItems: 'center' }}>
         <h2>Línea de Tiempo</h2>
-        <div className="timeline-tools">
+        <div className="timeline-tools" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            className="btn-secondary"
+            onClick={addVideoLayer}
+            style={{ fontSize: '0.78rem', padding: '4px 10px' }}
+          >
+            ➕ Capa de Video
+          </button>
           <button
             className={`btn-icon${isCutMode ? ' active' : ''}`}
             title="Herramienta de corte"
             onClick={() => setIsCutMode(!isCutMode)}
-            style={{ fontSize: '0.85rem', width: 'auto', padding: '0 10px' }}
+            style={{ fontSize: '0.82rem', width: 'auto', padding: '0 10px', height: '28px' }}
           >
             ✂️ {isCutMode ? 'Corte ON' : 'Corte'}
           </button>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0 6px' }}>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
             Ctrl+Scroll: zoom
           </span>
         </div>
@@ -305,38 +424,89 @@ export default function Timeline({ videoRef, audioRef }) {
         onClick={handleTrackClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setCutGuideX(null)}
-        style={{ cursor: isCutMode ? 'crosshair' : 'default' }}
+        style={{ cursor: isCutMode ? 'crosshair' : 'default', flex: 1, overflowY: 'auto', position: 'relative' }}
       >
-        <div className="timeline-inner" style={{ width: totalWidth + LABEL_WIDTH }}>
+        <div className="timeline-inner" style={{ width: totalWidth + LABEL_WIDTH, position: 'relative' }}>
           {/* Ruler */}
-          <div className="timeline-ruler" style={{ width: totalWidth + LABEL_WIDTH }}>
+          <div className="timeline-ruler" style={{ width: totalWidth + LABEL_WIDTH, height: '24px', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(0,0,0,0.1)' }}>
             <div style={{ width: LABEL_WIDTH, display: 'inline-block', flexShrink: 0 }} />
             <div style={{ position: 'relative', display: 'inline-block', width: totalWidth }}>
               {ticks.map(t => (
                 <div
                   key={t}
                   className="ruler-tick"
-                  style={{ left: t * pixelsPerSecond }}
+                  style={{ left: t * pixelsPerSecond, position: 'absolute' }}
                 >
-                  <div className="ruler-tick-line" />
-                  <div className="ruler-tick-label">{t}s</div>
+                  <div className="ruler-tick-line" style={{ height: '6px', width: '1px', background: 'var(--border-medium)' }} />
+                  <div className="ruler-tick-label" style={{ fontSize: '0.65rem', color: 'var(--text-muted)', position: 'absolute', top: '6px', transform: 'translateX(-50%)' }}>{t}s</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Track rows */}
-          {TRACK_DEFS.map(({ name, label, locked }) => {
-            const clips = name === 'audio_lyrics' ? tracks.audio : tracks[name]
+          {/* 1. Track row: Audio & Lyrics */}
+          <div className="track-row" style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', height: '60px', alignItems: 'center' }}>
+            <div 
+              className="track-label" 
+              style={{ width: LABEL_WIDTH, padding: '0 8px', fontSize: '0.78rem', color: 'var(--text-primary)', borderRight: '1px solid var(--border-subtle)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)' }}
+            >
+              <span>Audio + Letras</span>
+              <span style={{ fontSize: '0.7rem' }}>🔒</span>
+            </div>
+            <div
+              className="track-content"
+              style={{ width: totalWidth, position: 'relative', height: '100%', background: 'rgba(0,0,0,0.1)' }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setContextMenu({
+                  x: e.clientX,
+                  y: e.clientY,
+                  clipId: null,
+                  trackName: 'audio_lyrics',
+                  layerIndex: 0
+                })
+              }}
+            >
+              {tracks.audio.map(clip => (
+                <TimelineClip
+                  key={clip.id}
+                  clip={clip}
+                  trackName="audio_lyrics"
+                  pixelsPerSecond={pixelsPerSecond}
+                  isCutMode={isCutMode}
+                  onSelect={(id) => setSelectedClipId(id === selectedClipId ? null : id)}
+                  isSelected={clip.id === selectedClipId}
+                  onContextMenu={(ev, cid, tname) => {
+                    ev.preventDefault()
+                    ev.stopPropagation()
+                    setContextMenu({
+                      x: ev.clientX,
+                      y: ev.clientY,
+                      clipId: cid,
+                      trackName: tname,
+                      layerIndex: 0
+                    })
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* 2. Track rows: Video layers */}
+          {videoLayerRows.map(({ name, label, index }) => {
+            const layerClips = tracks.video.filter(c => (c.layer || 0) === index)
             return (
-              <div className="track-row" key={name}>
-                <div className="track-label">
-                  <span>{label}</span>
-                  {locked && <span style={{ marginLeft: 'auto', fontSize: '0.65rem' }}>🔒</span>}
+              <div className="track-row" key={name} style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', height: '42px', alignItems: 'center' }}>
+                <div 
+                  className="track-label" 
+                  style={{ width: LABEL_WIDTH, padding: '0 8px', fontSize: '0.75rem', color: 'var(--text-secondary)', borderRight: '1px solid var(--border-subtle)', height: '100%', display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}
+                >
+                  {label}
                 </div>
                 <div
                   className="track-content"
-                  style={{ width: totalWidth, position: 'relative' }}
+                  style={{ width: totalWidth, position: 'relative', height: '100%', background: 'rgba(0,0,0,0.05)' }}
                   onContextMenu={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
@@ -344,19 +514,22 @@ export default function Timeline({ videoRef, audioRef }) {
                       x: e.clientX,
                       y: e.clientY,
                       clipId: null,
-                      trackName: name
+                      trackName: 'video',
+                      layerIndex: index
                     })
                   }}
                 >
-                  {clips.map(clip => (
+                  {layerClips.map(clip => (
                     <TimelineClip
                       key={clip.id}
                       clip={clip}
-                      trackName={name}
+                      trackName="video"
                       pixelsPerSecond={pixelsPerSecond}
-                      isCutMode={isCutMode && !locked}
+                      isCutMode={isCutMode}
                       onSelect={(id) => setSelectedClipId(id === selectedClipId ? null : id)}
                       isSelected={clip.id === selectedClipId}
+                      videoLayersCount={videoLayersCount}
+                      onMoveLayer={moveClipLayer}
                       onContextMenu={(ev, cid, tname) => {
                         ev.preventDefault()
                         ev.stopPropagation()
@@ -364,7 +537,8 @@ export default function Timeline({ videoRef, audioRef }) {
                           x: ev.clientX,
                           y: ev.clientY,
                           clipId: cid,
-                          trackName: tname
+                          trackName: tname,
+                          layerIndex: index
                         })
                       }}
                     />
@@ -377,17 +551,18 @@ export default function Timeline({ videoRef, audioRef }) {
           {/* Playhead */}
           <div
             className="playhead"
-            style={{ left: LABEL_WIDTH + masterTime * pixelsPerSecond }}
+            style={{ left: LABEL_WIDTH + masterTime * pixelsPerSecond, position: 'absolute', top: 0, bottom: 0, width: '1px', background: 'var(--lava-orange)', zIndex: 100 }}
           >
             <div
               className="playhead-head"
               onMouseDown={handlePlayheadMouseDown}
+              style={{ width: '13px', height: '13px', borderRadius: '50%', background: 'var(--lava-orange)', cursor: 'ew-resize', position: 'absolute', top: '6px', left: '-6px', border: '1px solid #fff' }}
             />
           </div>
 
           {/* Cut guide */}
           {isCutMode && cutGuideX !== null && (
-            <div className="cut-guide" style={{ left: cutGuideX, display: 'block' }} />
+            <div className="cut-guide" style={{ left: cutGuideX, display: 'block', position: 'absolute', top: 0, bottom: 0, width: '1px', background: '#ff0000', borderLeft: '1px dashed #fff', pointerEvents: 'none' }} />
           )}
         </div>
       </div>
@@ -408,47 +583,137 @@ export default function Timeline({ videoRef, audioRef }) {
             padding: '4px',
             display: 'flex',
             flexDirection: 'column',
-            minWidth: '130px',
+            minWidth: '150px',
             backdropFilter: 'var(--glass-blur)',
           }}
           onClick={e => e.stopPropagation()}
         >
-          {contextMenu.clipId ? (
+          {/* Menu options for tracks */}
+          {contextMenu.clipId === null ? (
+            <>
+              {contextMenu.trackName === 'audio_lyrics' && (
+                <button
+                  className="context-menu-item"
+                  onClick={() => setIsImportModalOpen(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem' }}
+                >
+                  {audioDuration > 0 ? '🔄 Reemplazar Audio...' : '📥 Importar Audio...'}
+                </button>
+              )}
+              <button
+                className="context-menu-item"
+                disabled={!canPaste}
+                onClick={() => handlePaste(contextMenu.trackName, contextMenu.layerIndex)}
+                style={{ opacity: canPaste ? 1 : 0.4, display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem' }}
+              >
+                📋 Pegar clip
+              </button>
+            </>
+          ) : (
+            /* Menu options for clips */
             <>
               <button
                 className="context-menu-item"
-                onClick={() => {
-                  handleCopy(contextMenu.clipId, contextMenu.trackName)
-                  setContextMenu(null)
-                }}
+                onClick={() => handleCopy(contextMenu.clipId, contextMenu.trackName)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem' }}
               >
                 📋 Copiar clip
               </button>
               <button
                 className="context-menu-item"
-                onClick={() => {
-                  handleCut(contextMenu.clipId, contextMenu.trackName)
-                  setContextMenu(null)
-                }}
+                onClick={() => handleCut(contextMenu.clipId, contextMenu.trackName)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem' }}
               >
                 ✂️ Cortar clip
               </button>
+              <button
+                className="context-menu-item"
+                onClick={() => handleDuplicate(contextMenu.clipId, contextMenu.trackName, false)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem' }}
+              >
+                👥 Duplicar clip
+              </button>
+              <button
+                className="context-menu-item"
+                onClick={() => handleDuplicate(contextMenu.clipId, contextMenu.trackName, true)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem' }}
+              >
+                ⏩ Duplicar clip adelante
+              </button>
+              {contextMenu.trackName === 'audio_lyrics' && (
+                <button
+                  className="context-menu-item"
+                  onClick={() => setIsImportModalOpen(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem' }}
+                >
+                  🔄 Reemplazar Audio...
+                </button>
+              )}
             </>
-          ) : (
-            <button
-              className="context-menu-item"
-              disabled={!canPaste}
-              onClick={() => {
-                handlePaste(contextMenu.trackName)
-                setContextMenu(null)
-              }}
-              style={{ opacity: canPaste ? 1 : 0.4 }}
-            >
-              📥 Pegar clip
-            </button>
           )}
         </div>
       )}
+
+      {/* Import/Replace Modal */}
+      <ImportAudioModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+      />
     </div>
+  )
+}
+
+// Lightweight component to draw audio waveform peaks on timeline
+function WaveformCanvas({ wavemap, duration }) {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    const w = canvas.width
+    const h = canvas.height
+    const barWidth = 2
+    const gap = 1
+    const totalBars = Math.floor(w / (barWidth + gap))
+
+    ctx.fillStyle = 'rgba(74, 222, 128, 0.4)' // Waveform bar color (green-neon glow)
+
+    // Normalize and downsample peaks array to match drawing columns count
+    const step = Math.max(1, Math.floor(wavemap.length / totalBars))
+    
+    for (let i = 0; i < totalBars; i++) {
+      const index = i * step
+      if (index >= wavemap.length) break
+      
+      const peak = wavemap[index]
+      const val = typeof peak === 'object' ? (peak.value || 0) : (peak || 0)
+      
+      // Calculate bar height relative to canvas height
+      const barHeight = val * h * 0.95
+      const x = i * (barWidth + gap)
+      const y = (h - barHeight) / 2
+      
+      ctx.fillRect(x, y, barWidth, barHeight)
+    }
+  }, [wavemap])
+
+  return (
+    <canvas 
+      ref={canvasRef} 
+      width={1200} 
+      height={30} 
+      style={{ 
+        position: 'absolute', 
+        inset: 0, 
+        width: '100%', 
+        height: '100%', 
+        pointerEvents: 'none',
+        zIndex: 1,
+        opacity: 0.8
+      }} 
+    />
   )
 }
