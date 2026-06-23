@@ -171,6 +171,22 @@
         "duration": 15.698333,
         "mediaStart": 0,
         "layer": 1
+      },
+      {
+        "id": "clip-dup-0.08876452091233966",
+        "type": "video",
+        "start": 15.698333,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.07960814254780957",
+        "type": "video",
+        "start": 31.396666,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
       }
     ],
     "lyrics": [
@@ -185,9 +201,9 @@
   },
   "clipFilters": {
     "video-main-1782236452095": {
-      "brightness": 0.9,
-      "contrast": 1.3,
-      "saturation": 0,
+      "brightness": 1,
+      "contrast": 1,
+      "saturation": 1,
       "hue": 0
     }
   },
@@ -197,7 +213,9 @@
     "fps": 30,
     "inPoint": 0,
     "outPoint": 30,
-    "letterSpacing": -2
+    "letterSpacing": 0,
+    "lineHeight": 1,
+    "fontSize": 20
   },
   "audioWavemap": []
 }

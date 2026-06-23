@@ -196,7 +196,7 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
         </div>
       </div>
 
-      <div className="preview-canvas-area" style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '16px', gap: '16px' }}>
+      <div className="preview-canvas-area" style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '16px 16px 8px', gap: '16px' }}>
         <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
           {/* Video */}
           <video
@@ -328,78 +328,31 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
         {/* Real-time Decibel VU Meter Panel */}
         <VUMeter audioRef={audioRef} isPlaying={isPlaying} />
 
-        {/* Controls overlay */}
-        <div className="preview-controls-bar" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 14px' }}>
-          {/* Progress Timeline Slider (Scrubber) */}
-          <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input 
-              type="range"
-              min="0"
-              max={totalTime || 100}
-              step="0.05"
-              value={masterTime}
-              onChange={(e) => seekTo(parseFloat(e.target.value))}
-              style={{
-                width: '100%',
-                height: '4px',
-                background: 'var(--border-subtle)',
-                borderRadius: '2px',
-                outline: 'none',
-                cursor: 'pointer',
-                accentColor: 'var(--lava-red)'
-              }}
-            />
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}>
-            <button
-              id="btn-back-start"
-              className="btn-icon"
-              title="Ir al inicio"
-              onClick={() => seekTo(0)}
-              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
-            >⏮</button>
-            <button
-              id="btn-back5"
-              className="btn-icon"
-              title="−5s"
-              onClick={() => seekTo(Math.max(0, masterTime - 5))}
-              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
-            >⏪</button>
-            <button
-              id="btn-play-pause"
-              className="btn-icon"
-              style={{ width: 34, height: 34, fontSize: '1rem' }}
-              onClick={togglePlay}
-            >
-              {isPlaying ? '⏸' : '▶'}
-            </button>
-            <button
-              id="btn-fwd-frame"
-              className="btn-icon"
-              title="+1 frame"
-              onClick={stepForwardFrame}
-              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
-            >⏭</button>
-            <button
-              id="btn-fwd5"
-              className="btn-icon"
-              title="+5s"
-              onClick={() => seekTo(Math.min(totalTime, masterTime + 5))}
-              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
-            >⏩</button>
-            <button
-              id="btn-go-end"
-              className="btn-icon"
-              title="Ir al final"
-              onClick={() => seekTo(totalTime)}
-              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
-            >⏭|</button>
-            
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
-              {formatTime(masterTime)} / {formatTime(totalTime)}
-            </span>
-          </div>
+      </div>
+
+      {/* Controls Bar - fuera del canvas para tener todo el ancho */}
+      <div className="preview-controls-bar" style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 16px 12px', borderTop: '1px solid var(--border-subtle)', background: 'rgba(0,0,0,0.15)', flexShrink: 0 }}>
+        {/* Scrubber */}
+        <input
+          type="range"
+          min="0"
+          max={totalTime || 100}
+          step="0.05"
+          value={masterTime}
+          onChange={(e) => seekTo(parseFloat(e.target.value))}
+          style={{ width: '100%', height: '4px', background: 'var(--border-subtle)', borderRadius: '2px', outline: 'none', cursor: 'pointer', accentColor: 'var(--lava-red)' }}
+        />
+        {/* Buttons row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+          <button id="btn-back-start" className="btn-icon" title="Inicio" onClick={() => seekTo(0)} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏮</button>
+          <button id="btn-back5" className="btn-icon" title="-5s" onClick={() => seekTo(Math.max(0, masterTime - 5))} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏪</button>
+          <button id="btn-play-pause" className="btn-icon" onClick={togglePlay} style={{ width: '36px', height: '36px', fontSize: '1.1rem', flexShrink: 0 }}>{isPlaying ? '⏸' : '▶'}</button>
+          <button id="btn-fwd-frame" className="btn-icon" title="+1 frame" onClick={stepForwardFrame} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏭</button>
+          <button id="btn-fwd5" className="btn-icon" title="+5s" onClick={() => seekTo(Math.min(totalTime, masterTime + 5))} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏩</button>
+          <button id="btn-go-end" className="btn-icon" title="Final" onClick={() => seekTo(totalTime)} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏭|</button>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '12px', whiteSpace: 'nowrap' }}>
+            {formatTime(masterTime)} / {formatTime(totalTime)}
+          </span>
         </div>
       </div>
     </div>
