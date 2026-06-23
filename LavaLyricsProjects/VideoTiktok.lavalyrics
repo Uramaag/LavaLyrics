@@ -196,6 +196,8 @@
     "orientation": "vertical",
     "fps": 30,
     "inPoint": 0,
-    "outPoint": 30
-  }
+    "outPoint": 30,
+    "letterSpacing": -2
+  },
+  "audioWavemap": []
 }

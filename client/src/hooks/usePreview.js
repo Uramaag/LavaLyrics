@@ -40,8 +40,12 @@ export function usePreview({ videoRef, audioRef }) {
         if (Math.abs(videoRef.current.currentTime - vTarget) > 0.15) {
           videoRef.current.currentTime = Math.min(vTarget, bgVideoDuration - 0.01)
         }
-        if (isPlaying && videoRef.current.paused) {
-          videoRef.current.play().catch(() => {})
+        if (isPlaying) {
+          if (videoRef.current.paused) {
+            videoRef.current.play().catch(() => {})
+          }
+        } else {
+          videoRef.current.pause()
         }
       } else {
         videoRef.current.style.opacity = '0'
@@ -54,7 +58,6 @@ export function usePreview({ videoRef, audioRef }) {
     if (audioRef.current) {
       if (aBlock && audioDuration > 0) {
         audioRef.current.muted = false
-        audioRef.current.volume = 1
         const aTarget = aBlock.mediaStart + (time - aBlock.start)
         
         if (Math.abs(audioRef.current.currentTime - aTarget) > 0.1) {
@@ -71,7 +74,6 @@ export function usePreview({ videoRef, audioRef }) {
           }
         }
       } else {
-        audioRef.current.volume = 0
         if (!audioRef.current.paused) {
           audioRef.current.pause()
         }
@@ -131,15 +133,17 @@ export function usePreview({ videoRef, audioRef }) {
   }, [isPlaying, setIsPlaying])
 
   const seekTo = useCallback((t) => {
+    masterTimeRef.current = t
     setMasterTime(t)
     syncAtTime(t)
   }, [setMasterTime, syncAtTime])
 
   const stepForwardFrame = useCallback(() => {
-    const t = masterTime + (1 / 60)
+    const t = masterTimeRef.current + (1 / 60)
+    masterTimeRef.current = t
     setMasterTime(t)
     syncAtTime(t)
-  }, [masterTime, setMasterTime, syncAtTime])
+  }, [setMasterTime, syncAtTime])
 
   return { togglePlay, seekTo, stepForwardFrame, getBlockAtTime }
 }

@@ -9,7 +9,8 @@ export default function Sidebar({ videoRef, audioRef }) {
     tracks, updateTrack,
     selectedClipId, setSelectedClipId,
     exportSettings, setExportSettings,
-    parsedLyrics, addToast
+    parsedLyrics, addToast,
+    getClipFilters, setClipFilter, resetClipFilters,
   } = useAppStore()
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
@@ -18,6 +19,9 @@ export default function Sidebar({ videoRef, audioRef }) {
   const selectedVideoClip = selectedClipId
     ? tracks.video.find(c => c.id === selectedClipId)
     : null
+
+  const isAdjustmentLayer = selectedVideoClip?.clipType === 'adjustment'
+  const adjustmentFilters = isAdjustmentLayer ? getClipFilters(selectedClipId) : null
 
   const selectedAudioClip = selectedClipId
     ? tracks.audio.find(c => c.id === selectedClipId)
@@ -132,6 +136,43 @@ export default function Sidebar({ videoRef, audioRef }) {
         </div>
       )}
 
+      {/* 1b. INSPECTOR DE CAPA DE AJUSTE */}
+      {isAdjustmentLayer && adjustmentFilters && (
+        <div style={{ padding: '0 16px 16px' }}>
+          <div className="sidebar-section-title" style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c084fc', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            🎨 Filtros de Capa de Ajuste
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {[['brightness', 'Brillo', 0.1, 2, 0.01], ['contrast', 'Contraste', 0.1, 2, 0.01], ['saturation', 'Saturación', 0, 3, 0.01], ['hue', 'Tono (°)', -180, 180, 1]].map(([key, label, min, max, step]) => (
+              <div key={key}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '3px' }}>
+                  <span>{label}</span>
+                  <span style={{ color: '#c084fc', fontWeight: 'bold' }}>
+                    {key === 'hue' ? `${adjustmentFilters[key]}°` : adjustmentFilters[key]?.toFixed(2)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={min}
+                  max={max}
+                  step={step}
+                  value={adjustmentFilters[key]}
+                  onChange={e => setClipFilter(selectedClipId, key, parseFloat(e.target.value))}
+                  style={{ width: '100%', accentColor: '#c084fc' }}
+                />
+              </div>
+            ))}
+            <button
+              className="btn-secondary"
+              style={{ fontSize: '0.72rem', padding: '6px', color: '#c084fc', borderColor: '#c084fc', marginTop: '4px' }}
+              onClick={() => resetClipFilters(selectedClipId)}
+            >
+              ↩ Restablecer Filtros
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 2. INSPECTOR DE CLIP DE AUDIO Y LETRAS SELECCIONADO */}
       {selectedAudioClip && (
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -182,27 +223,39 @@ export default function Sidebar({ videoRef, audioRef }) {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
               <div>
-                <label className="label" style={{ fontSize: '0.65rem' }}>Tamaño Letra (px)</label>
+                <label className="label" style={{ fontSize: '0.62rem', whiteSpace: 'nowrap' }}>Tamaño (px)</label>
                 <input 
                   type="number" 
                   min="10"
                   max="120"
                   value={exportSettings.fontSize || 28}
                   onChange={e => setExportSettings({ fontSize: parseInt(e.target.value) || 28 })}
-                  style={{ padding: '6px 10px', fontSize: '0.8rem', width: '100%' }}
+                  style={{ padding: '6px 6px', fontSize: '0.78rem', width: '100%' }}
                 />
               </div>
               <div>
-                <label className="label" style={{ fontSize: '0.65rem' }}>Interletrado (px)</label>
+                <label className="label" style={{ fontSize: '0.62rem', whiteSpace: 'nowrap' }}>Interletrado (px)</label>
                 <input 
                   type="number" 
                   min="-10"
                   max="40"
                   value={exportSettings.letterSpacing || 0}
                   onChange={e => setExportSettings({ letterSpacing: parseInt(e.target.value) || 0 })}
-                  style={{ padding: '6px 10px', fontSize: '0.8rem', width: '100%' }}
+                  style={{ padding: '6px 6px', fontSize: '0.78rem', width: '100%' }}
+                />
+              </div>
+              <div>
+                <label className="label" style={{ fontSize: '0.62rem', whiteSpace: 'nowrap' }}>Interlineado</label>
+                <input 
+                  type="number" 
+                  step="0.1"
+                  min="0.5"
+                  max="3.0"
+                  value={exportSettings.lineHeight || 1.2}
+                  onChange={e => setExportSettings({ lineHeight: parseFloat(e.target.value) || 1.2 })}
+                  style={{ padding: '6px 6px', fontSize: '0.78rem', width: '100%' }}
                 />
               </div>
             </div>

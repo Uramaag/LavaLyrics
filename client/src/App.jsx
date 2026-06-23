@@ -25,9 +25,13 @@ export default function App() {
     return () => clearInterval(heartbeat)
   }, [])
 
-  // 1b. Disable default browser context menu globally for custom timeline context menus
+  // 1b. Disable default browser context menu on timeline area for custom context menus
   useEffect(() => {
-    const handleContextMenu = (e) => e.preventDefault()
+    const handleContextMenu = (e) => {
+      if (e.target.closest('.timeline-panel') || e.target.closest('.clip')) {
+        e.preventDefault()
+      }
+    }
     window.addEventListener('contextmenu', handleContextMenu)
     return () => window.removeEventListener('contextmenu', handleContextMenu)
   }, [])

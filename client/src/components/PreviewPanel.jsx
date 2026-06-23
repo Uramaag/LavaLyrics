@@ -44,11 +44,14 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
     }
   }, [currentJobId]) // eslint-disable-line
 
+  const [isVideoLoading, setIsVideoLoading] = useState(false)
+
   // Set video src - reactive to previewQuality
   useEffect(() => {
     if (videoRef.current) {
       const targetSrc = bgVideoBlobUrl || (bgVideoPath ? `/api/video?path=${encodeURIComponent(bgVideoPath)}&quality=${previewQuality}` : '')
       if (targetSrc && !videoRef.current.src.includes(targetSrc)) {
+        setIsVideoLoading(true)
         videoRef.current.src = targetSrc
         videoRef.current.load()
       }
@@ -68,11 +71,41 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
   }, [selectedClipId, tracks.video, getClipFilters])
 
   // Active filter for current time position
+  // Combines filters from the active video clip + all adjustment layers active at masterTime
   const activeVideoFilter = useCallback(() => {
-    const activeClip = tracks.video.find(c => masterTime >= c.start && masterTime < c.start + c.duration)
-    if (!activeClip) return ''
-    const f = getClipFilters(activeClip.id)
-    return `brightness(${f.brightness}) contrast(${f.contrast}) saturate(${f.saturation}) hue-rotate(${f.hue}deg)`
+    // Base clip (normal video)
+    const activeClip = tracks.video.find(c =>
+      c.clipType !== 'adjustment' && masterTime >= c.start && masterTime < c.start + c.duration
+    )
+
+    // Adjustment layers active at masterTime
+    const adjustmentClips = tracks.video.filter(c =>
+      c.clipType === 'adjustment' && masterTime >= c.start && masterTime < c.start + c.duration
+    )
+
+    if (!activeClip && adjustmentClips.length === 0) return 'none'
+
+    // Start with base clip filters (or defaults)
+    let brightness = 1, contrast = 1, saturation = 1, hue = 0
+
+    if (activeClip) {
+      const f = getClipFilters(activeClip.id)
+      brightness = f.brightness
+      contrast = f.contrast
+      saturation = f.saturation
+      hue = f.hue
+    }
+
+    // Multiply/add adjustment layer filters
+    for (const adjClip of adjustmentClips) {
+      const f = getClipFilters(adjClip.id)
+      brightness *= f.brightness
+      contrast *= f.contrast
+      saturation *= f.saturation
+      hue += f.hue
+    }
+
+    return `brightness(${brightness}) contrast(${contrast}) saturate(${saturation}) hue-rotate(${hue}deg)`
   }, [tracks.video, masterTime, getClipFilters])
 
   const totalTime = audioDuration || 0
@@ -84,7 +117,8 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
 
   // Estilos de fuentes dinámicos del inspector
   const lyricStyle = {
-    letterSpacing: `${exportSettings.letterSpacing || 0}px`
+    letterSpacing: `${exportSettings.letterSpacing || 0}px`,
+    lineHeight: exportSettings.lineHeight || 1.2,
   }
   const currentLyricStyle = {
     ...lyricStyle,
@@ -95,10 +129,51 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
     fontSize: `${Math.round((exportSettings.fontSize || 28) * 0.7)}px`
   }
 
+  // States for visual guides
+  const [guidesEnabled, setGuidesEnabled] = useState(false)
+  const [showSafeMargins, setShowSafeMargins] = useState(false)
+  const [showRuleOfThirds, setShowRuleOfThirds] = useState(false)
+  const [showCenterSplit, setShowCenterSplit] = useState(false)
+  
+  const [safeMarginsColor, setSafeMarginsColor] = useState('#ef4444') // red
+  const [ruleOfThirdsColor, setRuleOfThirdsColor] = useState('#3b82f6') // blue
+  const [centerSplitColor, setCenterSplitColor] = useState('#22c55e') // green
+
   return (
     <div className="editor-preview" style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Upper header options */}
-      <div className="preview-top-options" style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 12px', background: 'rgba(0,0,0,0.1)', borderBottom: '1px solid var(--border-subtle)', zIndex: 10 }}>
+      <div className="preview-top-options" style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', background: 'rgba(0,0,0,0.1)', borderBottom: '1px solid var(--border-subtle)', zIndex: 10, alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+        
+        {/* Guides controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+            <input type="checkbox" checked={guidesEnabled} onChange={e => setGuidesEnabled(e.target.checked)} />
+            📐 GUÍAS
+          </label>
+
+          {guidesEnabled && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '2px 8px', borderRadius: '4px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={showSafeMargins} onChange={e => setShowSafeMargins(e.target.checked)} />
+                Márgenes
+                <input type="color" value={safeMarginsColor} onChange={e => setSafeMarginsColor(e.target.value)} style={{ width: 14, height: 14, border: 'none', padding: 0, background: 'none', cursor: 'pointer' }} />
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={showRuleOfThirds} onChange={e => setShowRuleOfThirds(e.target.checked)} />
+                Tercios
+                <input type="color" value={ruleOfThirdsColor} onChange={e => setRuleOfThirdsColor(e.target.value)} style={{ width: 14, height: 14, border: 'none', padding: 0, background: 'none', cursor: 'pointer' }} />
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={showCenterSplit} onChange={e => setShowCenterSplit(e.target.checked)} />
+                Mitades
+                <input type="color" value={centerSplitColor} onChange={e => setCenterSplitColor(e.target.value)} style={{ width: 14, height: 14, border: 'none', padding: 0, background: 'none', cursor: 'pointer' }} />
+              </label>
+            </div>
+          )}
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Calidad de Previsualización:</span>
           <select 
@@ -128,6 +203,11 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
             ref={videoRef}
             muted
             playsInline
+            onLoadStart={() => setIsVideoLoading(true)}
+            onWaiting={() => setIsVideoLoading(true)}
+            onPlaying={() => setIsVideoLoading(false)}
+            onCanPlay={() => setIsVideoLoading(false)}
+            onSeeked={() => setIsVideoLoading(false)}
             style={{ 
               maxHeight: '100%', 
               maxWidth: '100%', 
@@ -137,11 +217,98 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
               boxShadow: 'var(--shadow-lg)'
             }}
           />
+
+          {/* Loading Indicator */}
+          {isVideoLoading && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              zIndex: 10,
+              borderRadius: 'var(--radius-md)'
+            }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                border: '3px solid rgba(255,255,255,0.2)',
+                borderTopColor: 'var(--lava-red)',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }} />
+              <span style={{ fontSize: '0.8rem', color: '#fff', fontWeight: 'bold' }}>CARGANDO...</span>
+            </div>
+          )}
+
+          {/* Guides Overlay Rendered Mathematically inside Video Frame Aspect Box */}
+          {guidesEnabled && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              zIndex: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {/* Contenedor que simula la relación de aspecto 9:16 vertical de tiktok del reproductor */}
+              <div style={{
+                position: 'relative',
+                width: '100%',
+                maxWidth: '300px',
+                height: '100%',
+                maxHeight: '533px',
+                boxSizing: 'border-box'
+              }}>
+                {/* 1. Safe Margins for TikTok (9:16) */}
+                {showSafeMargins && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '10%',
+                    bottom: '15%',
+                    left: '8%',
+                    right: '12%',
+                    border: `1.5px dashed ${safeMarginsColor}`,
+                    boxSizing: 'border-box'
+                  }}>
+                    <span style={{ position: 'absolute', top: -14, left: 2, fontSize: '9px', color: safeMarginsColor, background: '#000', padding: '0 2px' }}>Margen Seguro Redes</span>
+                  </div>
+                )}
+
+                {/* 2. Rule of Thirds Grid */}
+                {showRuleOfThirds && (
+                  <div style={{ position: 'absolute', inset: 0, boxSizing: 'border-box' }}>
+                    {/* Vertical Lines */}
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: '33.33%', width: '1px', borderLeft: `1px solid ${ruleOfThirdsColor}`, opacity: 0.8 }} />
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: '66.66%', width: '1px', borderLeft: `1px solid ${ruleOfThirdsColor}`, opacity: 0.8 }} />
+                    {/* Horizontal Lines */}
+                    <div style={{ position: 'absolute', left: 0, right: 0, top: '33.33%', height: '1px', borderTop: `1px solid ${ruleOfThirdsColor}`, opacity: 0.8 }} />
+                    <div style={{ position: 'absolute', left: 0, right: 0, top: '66.66%', height: '1px', borderTop: `1px solid ${ruleOfThirdsColor}`, opacity: 0.8 }} />
+                  </div>
+                )}
+
+                {/* 3. Center split lines */}
+                {showCenterSplit && (
+                  <div style={{ position: 'absolute', inset: 0, boxSizing: 'border-box' }}>
+                    {/* Vertical Split */}
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: '1px', borderLeft: `1.5px dotted ${centerSplitColor}`, opacity: 0.9 }} />
+                    {/* Horizontal Split */}
+                    <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: '1px', borderTop: `1.5px dotted ${centerSplitColor}`, opacity: 0.9 }} />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Hidden audio element */}
           <audio ref={audioRef} style={{ display: 'none' }} crossOrigin="anonymous" />
 
           {/* Lyrics overlay */}
-          <div className="preview-lyrics-overlay" style={{ pointerEvents: 'none' }}>
+          <div className="preview-lyrics-overlay" style={{ pointerEvents: 'none', zIndex: 9 }}>
             {currentLyrics && (
               <>
                 {currentLyrics.past && (
@@ -162,39 +329,77 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
         <VUMeter audioRef={audioRef} isPlaying={isPlaying} />
 
         {/* Controls overlay */}
-        <div className="preview-controls-bar">
-          <button
-            id="btn-back5"
-            className="btn-icon"
-            title="−5s"
-            onClick={() => seekTo(Math.max(0, masterTime - 5))}
-            style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
-          >⏪</button>
-          <button
-            id="btn-play-pause"
-            className="btn-icon"
-            style={{ width: 34, height: 34, fontSize: '1rem' }}
-            onClick={togglePlay}
-          >
-            {isPlaying ? '⏸' : '▶'}
-          </button>
-          <button
-            id="btn-fwd-frame"
-            className="btn-icon"
-            title="+1 frame"
-            onClick={stepForwardFrame}
-            style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
-          >⏭</button>
-          <button
-            id="btn-fwd5"
-            className="btn-icon"
-            title="+5s"
-            onClick={() => seekTo(Math.min(totalTime, masterTime + 5))}
-            style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
-          >⏩</button>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
-            {formatTime(masterTime)} / {formatTime(totalTime)}
-          </span>
+        <div className="preview-controls-bar" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 14px' }}>
+          {/* Progress Timeline Slider (Scrubber) */}
+          <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input 
+              type="range"
+              min="0"
+              max={totalTime || 100}
+              step="0.05"
+              value={masterTime}
+              onChange={(e) => seekTo(parseFloat(e.target.value))}
+              style={{
+                width: '100%',
+                height: '4px',
+                background: 'var(--border-subtle)',
+                borderRadius: '2px',
+                outline: 'none',
+                cursor: 'pointer',
+                accentColor: 'var(--lava-red)'
+              }}
+            />
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}>
+            <button
+              id="btn-back-start"
+              className="btn-icon"
+              title="Ir al inicio"
+              onClick={() => seekTo(0)}
+              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
+            >⏮</button>
+            <button
+              id="btn-back5"
+              className="btn-icon"
+              title="−5s"
+              onClick={() => seekTo(Math.max(0, masterTime - 5))}
+              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
+            >⏪</button>
+            <button
+              id="btn-play-pause"
+              className="btn-icon"
+              style={{ width: 34, height: 34, fontSize: '1rem' }}
+              onClick={togglePlay}
+            >
+              {isPlaying ? '⏸' : '▶'}
+            </button>
+            <button
+              id="btn-fwd-frame"
+              className="btn-icon"
+              title="+1 frame"
+              onClick={stepForwardFrame}
+              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
+            >⏭</button>
+            <button
+              id="btn-fwd5"
+              className="btn-icon"
+              title="+5s"
+              onClick={() => seekTo(Math.min(totalTime, masterTime + 5))}
+              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
+            >⏩</button>
+            <button
+              id="btn-go-end"
+              className="btn-icon"
+              title="Ir al final"
+              onClick={() => seekTo(totalTime)}
+              style={{ height: '28px', width: '28px', fontSize: '0.8rem' }}
+            >⏭|</button>
+            
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+              {formatTime(masterTime)} / {formatTime(totalTime)}
+            </span>
+          </div>
         </div>
       </div>
     </div>

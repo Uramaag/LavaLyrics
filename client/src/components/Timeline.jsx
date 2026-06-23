@@ -123,12 +123,20 @@ function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, i
     )
   }
 
-  const clipClass = `clip clip-${clip.type}${isSelected ? ' selected' : ''}`
+  const isAdjustment = clip.clipType === 'adjustment'
+  const clipClass = `clip clip-${clip.type}${isSelected ? ' selected' : ''}${isAdjustment ? ' clip-adjustment' : ''}`
 
   return (
     <div
       className={clipClass}
-      style={{ left, width: Math.max(width, 20) }}
+      style={{
+        left, width: Math.max(width, 20),
+        ...(isAdjustment ? {
+          background: 'linear-gradient(135deg, rgba(139,92,246,0.55), rgba(192,132,252,0.35))',
+          borderColor: 'rgba(192,132,252,0.8)',
+          borderStyle: 'dashed',
+        } : {})
+      }}
       onMouseDown={(e) => handleMouseDown(e, 'move')}
       onClick={handleClick}
       onContextMenu={(e) => onContextMenu(e, clip.id, trackName)}
@@ -139,7 +147,7 @@ function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, i
         onClick={e => e.stopPropagation()}
       />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', pointerEvents: 'none', paddingLeft: '6px' }}>
-        🎬 Video
+        {isAdjustment ? '🎨 Ajuste' : '🎬 Video'}
       </span>
       <div
         className="resize-handle-right"
@@ -156,7 +164,7 @@ export default function Timeline({ videoRef, audioRef }) {
     masterTime, setMasterTime,
     pixelsPerSecond, setPixelsPerSecond,
     selectedClipId, setSelectedClipId,
-    updateTrack,
+    updateTrack, saveHistory, addToast,
   } = useAppStore()
 
   const [isCutMode, setIsCutMode] = useState(false)
@@ -199,8 +207,10 @@ export default function Timeline({ videoRef, audioRef }) {
   // Keyboard shortcut Ctrl+Shift+D to duplicate selected clip ahead
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') {
+      const key = e.key ? e.key.toLowerCase() : ''
+      if (e.ctrlKey && e.shiftKey && key === 'd') {
         e.preventDefault()
+        e.stopPropagation()
         if (!selectedClipId) return
         
         // Find which track has the selected clip
@@ -216,12 +226,11 @@ export default function Timeline({ videoRef, audioRef }) {
         }
         if (foundClip && foundTrack) {
           handleDuplicate(foundClip.id, foundTrack, true)
-          // Automatically select the new duplicate so the user can chain Ctrl+Shift+D repeatedly!
         }
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [selectedClipId, tracks])
 
   const handleCopy = (clipId, trackName) => {
@@ -313,6 +322,35 @@ export default function Timeline({ videoRef, audioRef }) {
       return c
     })
     updateTrack('video', updated)
+  }
+
+  // Toggle adjustment layer type
+  const toggleAdjustmentLayer = (clipId) => {
+    saveHistory()
+    const updated = tracks.video.map(c => {
+      if (c.id === clipId) {
+        const isAdj = c.clipType === 'adjustment'
+        return { ...c, clipType: isAdj ? 'video' : 'adjustment' }
+      }
+      return c
+    })
+    updateTrack('video', updated)
+    setContextMenu(null)
+  }
+
+  // Delete selected clip (used from context menu)
+  const deleteClipById = (clipId, trackName) => {
+    saveHistory()
+    const mappedTrack = trackName.startsWith('video') ? 'video' : (trackName === 'audio_lyrics' ? 'audio' : trackName)
+    if (mappedTrack === 'audio') {
+      updateTrack('audio', tracks.audio.filter(c => c.id !== clipId))
+      updateTrack('lyrics', tracks.lyrics.filter(c => c.id !== clipId))
+    } else {
+      updateTrack(mappedTrack, tracks[mappedTrack].filter(c => c.id !== clipId))
+    }
+    if (selectedClipId === clipId) setSelectedClipId(null)
+    setContextMenu(null)
+    addToast('Clip eliminado', 'info')
   }
 
   // Total visible duration
@@ -480,6 +518,7 @@ export default function Timeline({ videoRef, audioRef }) {
                   onContextMenu={(ev, cid, tname) => {
                     ev.preventDefault()
                     ev.stopPropagation()
+                    setSelectedClipId(cid) // Selección automática al dar click derecho
                     setContextMenu({
                       x: ev.clientX,
                       y: ev.clientY,
@@ -533,6 +572,7 @@ export default function Timeline({ videoRef, audioRef }) {
                       onContextMenu={(ev, cid, tname) => {
                         ev.preventDefault()
                         ev.stopPropagation()
+                        setSelectedClipId(cid) // Selección automática al dar click derecho
                         setContextMenu({
                           x: ev.clientX,
                           y: ev.clientY,
@@ -639,6 +679,28 @@ export default function Timeline({ videoRef, audioRef }) {
                 style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem' }}
               >
                 ⏩ Duplicar clip adelante
+              </button>
+              {/* Toggle Adjustment Layer - solo para clips de video */}
+              {contextMenu.trackName !== 'audio_lyrics' && (() => {
+                const clip = tracks.video.find(c => c.id === contextMenu.clipId)
+                const isAdj = clip?.clipType === 'adjustment'
+                return (
+                  <button
+                    className="context-menu-item"
+                    onClick={() => toggleAdjustmentLayer(contextMenu.clipId)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: isAdj ? 'rgba(139,92,246,0.15)' : 'transparent', color: isAdj ? '#c084fc' : 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem', borderRadius: '4px' }}
+                  >
+                    {isAdj ? '📹 Convertir a Clip Normal' : '🎨 Convertir a Capa de Ajuste'}
+                  </button>
+                )
+              })()}
+              {/* Delete clip */}
+              <button
+                className="context-menu-item"
+                onClick={() => deleteClipById(contextMenu.clipId, contextMenu.trackName)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', padding: '6px 12px', border: 'none', background: 'transparent', color: '#f87171', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem' }}
+              >
+                🗑️ Eliminar clip
               </button>
               {contextMenu.trackName === 'audio_lyrics' && (
                 <button
