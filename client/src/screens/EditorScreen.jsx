@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import Sidebar from '../components/Sidebar'
 import PreviewPanel from '../components/PreviewPanel'
@@ -8,6 +8,7 @@ import ResizableLayout from '../components/ResizableLayout'
 import ExportModal from '../components/ExportModal'
 import ExportProgressModal from '../components/ExportProgressModal'
 import SuccessModal from '../components/SuccessModal'
+import MissingMediaModal from '../components/MissingMediaModal'
 import '../styles/editor.css'
 
 export default function EditorScreen() {
@@ -15,10 +16,28 @@ export default function EditorScreen() {
     projectName, trackName, artistName, hasLyrics,
     exportModalOpen, renderProgressOpen, successModalOpen,
     setExportModalOpen, savingStatus, resetToIntro,
+    bgVideoPath,
   } = useAppStore()
 
   const videoRef = useRef(null)
   const audioRef = useRef(null)
+
+  const [showMissingMedia, setShowMissingMedia] = useState(false)
+  const [missingPath, setMissingPath] = useState('')
+
+  useEffect(() => {
+    if (bgVideoPath) {
+      fetch(`/api/check_file?path=${encodeURIComponent(bgVideoPath)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.exists) {
+            setMissingPath(bgVideoPath)
+            setShowMissingMedia(true)
+          }
+        })
+        .catch(err => console.error("Error al comprobar archivo de video:", err))
+    }
+  }, [bgVideoPath])
 
   return (
     <div className="editor-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -81,6 +100,12 @@ export default function EditorScreen() {
       {exportModalOpen && <ExportModal videoRef={videoRef} audioRef={audioRef} />}
       {renderProgressOpen && <ExportProgressModal />}
       {successModalOpen && <SuccessModal />}
+      <MissingMediaModal 
+        isOpen={showMissingMedia} 
+        onClose={() => setShowMissingMedia(false)} 
+        missingPath={missingPath} 
+        videoRef={videoRef} 
+      />
     </div>
   )
 }

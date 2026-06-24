@@ -149,6 +149,7 @@ export default function ExportModal({ videoRef, audioRef }) {
           width: w,
           height: h,
           filename: trimmedName,
+          export_settings: exportSettings,
         }),
       })
       const data = await res.json()

@@ -1,166 +1,138 @@
 {
   "projectName": "VideoTiktok",
-  "currentJobId": "cd4ba4a2-4bf2-44a2-be7b-3d047398bce8",
-  "trackName": "Heavy",
-  "artistName": "The Marías",
+  "currentJobId": "13db68f0-d6c1-4b3d-9efb-ac1daf7fea6a",
+  "trackName": "Último Tema",
+  "artistName": "Enjambre",
   "hasLyrics": true,
-  "audioDuration": 253.225229,
-  "bgVideoPath": "C:\\Users\\urama\\OneDrive\\Documents\\Antigravity Projects\\lavalyrics\\data\\backgrounds\\5c5f91f4-8b87-4f38-b996-398a91944dbe_IMG_4532.MOV",
+  "audioDuration": 228.437917,
+  "bgVideoPath": "C:\\Users\\Xilito\\Documents\\Antigravity Projects\\LavaLyrics\\data\\backgrounds\\78850eba-51df-4988-a5cc-f1014ae38815_IMG_4652.mov",
   "bgVideoDuration": 15.698333,
   "parsedLyrics": [
     {
-      "time": 14.08,
-      "text": "I'm heavy"
+      "time": 19.52,
+      "text": "Soy culpable del pecado"
     },
     {
-      "time": 18.81,
-      "text": "I'm by your side"
+      "time": 23.48,
+      "text": "De no haberme percatado"
     },
     {
-      "time": 24.07,
-      "text": "Forget me"
+      "time": 27.48,
+      "text": "Que lo nuestro había acabado"
     },
     {
-      "time": 26.4,
-      "text": "'Cause I know what I need"
+      "time": 29.36,
+      "text": "Horas después de haber empezado"
     },
     {
-      "time": 28.66,
-      "text": "Like a loser like me could be fine"
+      "time": 34.63,
+      "text": "Mas hoy me siento diferente"
     },
     {
-      "time": 36.34,
-      "text": "I'm heavy"
+      "time": 38.53,
+      "text": "Pues encontré a alguien más"
     },
     {
-      "time": 41.25,
-      "text": "Alone inside"
+      "time": 42.04,
+      "text": "Quien me acepta definitivamente, ahora ya"
     },
     {
-      "time": 46.17,
-      "text": "Don't tell me what I want, what I need"
+      "time": 46.77,
+      "text": "Te pude dejar y puedo voltear atrás sin llorar"
     },
     {
-      "time": 50.77,
-      "text": "Like a loser like me will be fine"
+      "time": 55.35,
+      "text": "Mas te mereces un último tema"
     },
     {
-      "time": 57.04,
-      "text": "Maybe I'm living in my head"
+      "time": 62.09,
+      "text": "Te adoraba aunque a mi alma metiste en problemas"
     },
     {
-      "time": 62.17,
-      "text": "Maybe I'm living to pretend"
+      "time": 69.78999999999999,
+      "text": "Mereces que te cante"
     },
     {
-      "time": 67.17,
-      "text": "Maybe I wanna stay in bed"
+      "time": 73.83,
+      "text": "Que fue un gusto amarte"
     },
     {
-      "time": 70.28,
-      "text": "Far from the weight of the world in my hands"
+      "time": 77.97,
+      "text": "Mereces saber que soy feliz"
     },
     {
-      "time": 74.63,
-      "text": "'Cause they don't understand"
+      "time": 83.1,
+      "text": "Ahora que al fin pude dejarte"
     },
     {
-      "time": 101.93,
-      "text": "Is someone telling me don't get in the water?"
+      "time": 104.77000000000001,
+      "text": "Lo siento si te duele la noticia"
     },
     {
-      "time": 107.38,
-      "text": "What have I done?"
+      "time": 108.38,
+      "text": "Pues cuando dueles, también duelo yo"
     },
     {
-      "time": 112.06,
-      "text": "I don't wanna get lost inside the color under my tongue"
+      "time": 112.41,
+      "text": "Siento si interrumpí esa sonrisa que me cautivaba"
     },
     {
-      "time": 121.12,
-      "text": "'Cause I don't wanna be in love with another"
+      "time": 117.47,
+      "text": "La misma que me endulzaba, hoy no me sabe a nada"
     },
     {
-      "time": 125.87,
-      "text": "Even in another life"
+      "time": 125.7,
+      "text": "Se derrama despedidas lo que llamábamos una familia"
     },
     {
-      "time": 131.32,
-      "text": "Can someone tell me it's alright to be covered"
+      "time": 134.66,
+      "text": "Y el día que domé a la bestia del tiempo"
     },
     {
-      "time": 135.56,
-      "text": "Underneath the covers? But I"
+      "time": 140.44,
+      "text": "Fue el día de tu partida"
     },
     {
-      "time": 139.81,
-      "text": "No, I don't need to sleep anymore"
+      "time": 146.35,
+      "text": "Te mereces un último tema"
     },
     {
-      "time": 146.07,
-      "text": "Is someone banging at my door?"
+      "time": 151.37,
+      "text": "Te adoraba aunque a mi alma metiste en problemas"
     },
     {
-      "time": 150.82999999999998,
-      "text": "When I just wanna be alone?"
+      "time": 159.67000000000002,
+      "text": "Mereces que te cante"
     },
     {
-      "time": 156.16,
-      "text": "Is someone banging at my door?"
+      "time": 163.15,
+      "text": "Que fue un gusto amarte"
     },
     {
-      "time": 160.96,
-      "text": "Je ne sais pas qui est ici"
+      "time": 167.57,
+      "text": "Mereces saber que soy feliz"
     },
     {
-      "time": 165.61,
-      "text": "Is someone banging at my door"
+      "time": 172.57,
+      "text": "Ahora que al fin pude dejarte"
     },
     {
-      "time": 171.09,
-      "text": "When I just wanna be alone"
+      "time": 178.18,
+      "text": "Ya no me duele nada de lo que me diste"
     },
     {
-      "time": 175.93,
-      "text": "Is someone banging at my door, door, door, door?"
-    },
-    {
-      "time": 182.32,
-      "text": "Door, door, door, door, at my door"
-    },
-    {
-      "time": 190.77,
-      "text": "Is someone banging at my door?"
-    },
-    {
-      "time": 195.52,
-      "text": "'Cause I just wanna be alone"
-    },
-    {
-      "time": 200.43,
-      "text": "Yeah, I just wanna be alone"
-    },
-    {
-      "time": 205.94,
-      "text": "(I just wanna be alone)"
-    },
-    {
-      "time": 210.43,
-      "text": "(Yeah, I just wanna be alone)"
-    },
-    {
-      "time": 215.89,
-      "text": "(I just wanna be alone)"
+      "time": 185.83,
+      "text": "No me conmueven más tus ojos tristes"
     }
   ],
   "tracks": {
     "audio": [
       {
-        "id": "audio-main-1782236595559",
+        "id": "audio-cut-0.940480666041905",
         "type": "audio",
         "start": 0,
-        "duration": 253.225229,
-        "mediaStart": 0
+        "duration": 220.08531283333332,
+        "mediaStart": 8.352604166666667
       }
     ],
     "video": [
@@ -187,15 +159,30 @@
         "duration": 15.698333,
         "mediaStart": 0,
         "layer": 1
+      },
+      {
+        "id": "clip-dup-0.111077703346388",
+        "type": "video",
+        "start": 47.094999,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
       }
     ],
     "lyrics": [
       {
-        "id": "lyrics-main-1782236595559",
+        "id": "lyrics-main-1782257841819",
+        "type": "lyrics",
+        "start": -8.352604166666667,
+        "duration": 8.352604166666667,
+        "mediaStart": -0.5
+      },
+      {
+        "id": "lyrics-cut-0.940480666041905",
         "type": "lyrics",
         "start": 0,
-        "duration": 253.225229,
-        "mediaStart": 0
+        "duration": 220.08531283333332,
+        "mediaStart": -0.5
       }
     ]
   },
@@ -211,11 +198,512 @@
     "resolution": "1080x1920",
     "orientation": "vertical",
     "fps": 30,
-    "inPoint": 0,
-    "outPoint": 30,
+    "inPoint": 8,
+    "outPoint": 228.437917,
     "letterSpacing": 0,
     "lineHeight": 1,
-    "fontSize": 20
+    "fontSize": 15
   },
-  "audioWavemap": []
+  "audioWavemap": [
+    {
+      "start_time": 0,
+      "end_time": 2.29,
+      "value": 1
+    },
+    {
+      "start_time": 2.29,
+      "end_time": 4.58,
+      "value": 0.6686281012723547
+    },
+    {
+      "start_time": 4.58,
+      "end_time": 6.87,
+      "value": 0.7083777730298128
+    },
+    {
+      "start_time": 6.87,
+      "end_time": 9.16,
+      "value": 0.7507889707027043
+    },
+    {
+      "start_time": 9.16,
+      "end_time": 11.45,
+      "value": 0.7858393166873029
+    },
+    {
+      "start_time": 11.45,
+      "end_time": 13.74,
+      "value": 0.7907494018578717
+    },
+    {
+      "start_time": 13.74,
+      "end_time": 16.03,
+      "value": 0.8064822140231244
+    },
+    {
+      "start_time": 16.03,
+      "end_time": 18.32,
+      "value": 0.8084870374273322
+    },
+    {
+      "start_time": 18.32,
+      "end_time": 20.61,
+      "value": 0.8270543750549003
+    },
+    {
+      "start_time": 20.61,
+      "end_time": 22.9,
+      "value": 0.8381846165353068
+    },
+    {
+      "start_time": 22.9,
+      "end_time": 25.19,
+      "value": 0.8527274498315809
+    },
+    {
+      "start_time": 25.19,
+      "end_time": 27.48,
+      "value": 0.8603588533877037
+    },
+    {
+      "start_time": 27.48,
+      "end_time": 29.77,
+      "value": 0.8710581542289149
+    },
+    {
+      "start_time": 29.77,
+      "end_time": 32.06,
+      "value": 0.8752317411190426
+    },
+    {
+      "start_time": 32.06,
+      "end_time": 34.35,
+      "value": 0.8682434871142516
+    },
+    {
+      "start_time": 34.35,
+      "end_time": 36.64,
+      "value": 0.8611136155499269
+    },
+    {
+      "start_time": 36.64,
+      "end_time": 38.93,
+      "value": 0.8529706783524587
+    },
+    {
+      "start_time": 38.93,
+      "end_time": 41.22,
+      "value": 0.8513053312270923
+    },
+    {
+      "start_time": 41.22,
+      "end_time": 43.51,
+      "value": 0.8405257272866162
+    },
+    {
+      "start_time": 43.51,
+      "end_time": 45.8,
+      "value": 0.8374594244673976
+    },
+    {
+      "start_time": 45.8,
+      "end_time": 48.09,
+      "value": 0.8305897407427486
+    },
+    {
+      "start_time": 48.09,
+      "end_time": 50.38,
+      "value": 0.8255144109274835
+    },
+    {
+      "start_time": 50.38,
+      "end_time": 52.67,
+      "value": 0.8186108085652387
+    },
+    {
+      "start_time": 52.67,
+      "end_time": 54.96,
+      "value": 0.8199362445574357
+    },
+    {
+      "start_time": 54.96,
+      "end_time": 57.25,
+      "value": 0.8121129977668781
+    },
+    {
+      "start_time": 57.25,
+      "end_time": 59.54,
+      "value": 0.8047471452538114
+    },
+    {
+      "start_time": 59.54,
+      "end_time": 61.83,
+      "value": 0.8018621766894308
+    },
+    {
+      "start_time": 61.83,
+      "end_time": 64.12,
+      "value": 0.7915681600820541
+    },
+    {
+      "start_time": 64.12,
+      "end_time": 66.41,
+      "value": 0.7877325999563406
+    },
+    {
+      "start_time": 66.41,
+      "end_time": 68.7,
+      "value": 0.7709676610432271
+    },
+    {
+      "start_time": 68.7,
+      "end_time": 70.99,
+      "value": 0.7746926232181481
+    },
+    {
+      "start_time": 70.99,
+      "end_time": 73.28,
+      "value": 0.7544801591914725
+    },
+    {
+      "start_time": 73.28,
+      "end_time": 75.57,
+      "value": 0.7456976962287404
+    },
+    {
+      "start_time": 75.57,
+      "end_time": 77.86,
+      "value": 0.7339965634911961
+    },
+    {
+      "start_time": 77.86,
+      "end_time": 80.15,
+      "value": 0.7307079051588509
+    },
+    {
+      "start_time": 80.15,
+      "end_time": 82.44,
+      "value": 0.7180953902252285
+    },
+    {
+      "start_time": 82.44,
+      "end_time": 84.73,
+      "value": 0.7069641340847229
+    },
+    {
+      "start_time": 84.73,
+      "end_time": 87.02,
+      "value": 0.6998300589285595
+    },
+    {
+      "start_time": 87.02,
+      "end_time": 89.31,
+      "value": 0.6893338350585937
+    },
+    {
+      "start_time": 89.31,
+      "end_time": 91.6,
+      "value": 0.6803991730810096
+    },
+    {
+      "start_time": 91.6,
+      "end_time": 93.89,
+      "value": 0.6795257681629231
+    },
+    {
+      "start_time": 93.89,
+      "end_time": 96.18,
+      "value": 0.6666545149040523
+    },
+    {
+      "start_time": 96.18,
+      "end_time": 98.47,
+      "value": 0.6575122099847772
+    },
+    {
+      "start_time": 98.47,
+      "end_time": 100.76,
+      "value": 0.6497415805679255
+    },
+    {
+      "start_time": 100.76,
+      "end_time": 103.05,
+      "value": 0.638793470575292
+    },
+    {
+      "start_time": 103.05,
+      "end_time": 105.34,
+      "value": 0.6300198496505656
+    },
+    {
+      "start_time": 105.34,
+      "end_time": 107.63,
+      "value": 0.620671206352584
+    },
+    {
+      "start_time": 107.63,
+      "end_time": 109.92,
+      "value": 0.6148977903891976
+    },
+    {
+      "start_time": 109.92,
+      "end_time": 112.21,
+      "value": 0.6161735805122642
+    },
+    {
+      "start_time": 112.21,
+      "end_time": 114.5,
+      "value": 0.6102863776663455
+    },
+    {
+      "start_time": 114.5,
+      "end_time": 116.79,
+      "value": 0.6093178121261159
+    },
+    {
+      "start_time": 116.79,
+      "end_time": 119.08,
+      "value": 0.605580746505728
+    },
+    {
+      "start_time": 119.08,
+      "end_time": 121.37,
+      "value": 0.6025153858708872
+    },
+    {
+      "start_time": 121.37,
+      "end_time": 123.66,
+      "value": 0.5962955919396561
+    },
+    {
+      "start_time": 123.66,
+      "end_time": 125.95,
+      "value": 0.58923181823321
+    },
+    {
+      "start_time": 125.95,
+      "end_time": 128.24,
+      "value": 0.5849190779580749
+    },
+    {
+      "start_time": 128.24,
+      "end_time": 130.53,
+      "value": 0.5791319640833518
+    },
+    {
+      "start_time": 130.53,
+      "end_time": 132.82,
+      "value": 0.5783917695411214
+    },
+    {
+      "start_time": 132.82,
+      "end_time": 135.11,
+      "value": 0.5714190253407011
+    },
+    {
+      "start_time": 135.11,
+      "end_time": 137.4,
+      "value": 0.5714978064498174
+    },
+    {
+      "start_time": 137.4,
+      "end_time": 139.69,
+      "value": 0.56161733630851
+    },
+    {
+      "start_time": 139.69,
+      "end_time": 141.98,
+      "value": 0.5559603163536248
+    },
+    {
+      "start_time": 141.98,
+      "end_time": 144.27,
+      "value": 0.5418247241356617
+    },
+    {
+      "start_time": 144.27,
+      "end_time": 146.56,
+      "value": 0.5385362832304806
+    },
+    {
+      "start_time": 146.56,
+      "end_time": 148.85,
+      "value": 0.5291833638649389
+    },
+    {
+      "start_time": 148.85,
+      "end_time": 151.14,
+      "value": 0.5205817278269952
+    },
+    {
+      "start_time": 151.14,
+      "end_time": 153.43,
+      "value": 0.5173603994397916
+    },
+    {
+      "start_time": 153.43,
+      "end_time": 155.72,
+      "value": 0.5100286105157633
+    },
+    {
+      "start_time": 155.72,
+      "end_time": 158.01,
+      "value": 0.49804453256203707
+    },
+    {
+      "start_time": 158.01,
+      "end_time": 160.3,
+      "value": 0.48711707814999056
+    },
+    {
+      "start_time": 160.3,
+      "end_time": 162.59,
+      "value": 0.47626050499343225
+    },
+    {
+      "start_time": 162.59,
+      "end_time": 164.88,
+      "value": 0.46506489041236077
+    },
+    {
+      "start_time": 164.88,
+      "end_time": 167.17,
+      "value": 0.45911861985353525
+    },
+    {
+      "start_time": 167.17,
+      "end_time": 169.46,
+      "value": 0.44970047233877125
+    },
+    {
+      "start_time": 169.46,
+      "end_time": 171.75,
+      "value": 0.4430427076233732
+    },
+    {
+      "start_time": 171.75,
+      "end_time": 174.04,
+      "value": 0.43309026909075726
+    },
+    {
+      "start_time": 174.04,
+      "end_time": 176.33,
+      "value": 0.4227639283116549
+    },
+    {
+      "start_time": 176.33,
+      "end_time": 178.62,
+      "value": 0.4096319074073376
+    },
+    {
+      "start_time": 178.62,
+      "end_time": 180.91,
+      "value": 0.3986685775132188
+    },
+    {
+      "start_time": 180.91,
+      "end_time": 183.2,
+      "value": 0.38744527720658856
+    },
+    {
+      "start_time": 183.2,
+      "end_time": 185.49,
+      "value": 0.37991664422335164
+    },
+    {
+      "start_time": 185.49,
+      "end_time": 187.78,
+      "value": 0.36525966166593854
+    },
+    {
+      "start_time": 187.78,
+      "end_time": 190.07,
+      "value": 0.3519146346165498
+    },
+    {
+      "start_time": 190.07,
+      "end_time": 192.36,
+      "value": 0.3400605056312186
+    },
+    {
+      "start_time": 192.36,
+      "end_time": 194.65,
+      "value": 0.32713706985297
+    },
+    {
+      "start_time": 194.65,
+      "end_time": 196.94,
+      "value": 0.31435039576092405
+    },
+    {
+      "start_time": 196.94,
+      "end_time": 199.23,
+      "value": 0.30093477735893254
+    },
+    {
+      "start_time": 199.23,
+      "end_time": 201.52,
+      "value": 0.2879335751316666
+    },
+    {
+      "start_time": 201.52,
+      "end_time": 203.81,
+      "value": 0.26857944107303494
+    },
+    {
+      "start_time": 203.81,
+      "end_time": 206.1,
+      "value": 0.24762286881517562
+    },
+    {
+      "start_time": 206.1,
+      "end_time": 208.39,
+      "value": 0.21785288646156423
+    },
+    {
+      "start_time": 208.39,
+      "end_time": 210.68,
+      "value": 0.1925453067476926
+    },
+    {
+      "start_time": 210.68,
+      "end_time": 212.97,
+      "value": 0.16725396159540515
+    },
+    {
+      "start_time": 212.97,
+      "end_time": 215.26,
+      "value": 0.14301779047037033
+    },
+    {
+      "start_time": 215.26,
+      "end_time": 217.55,
+      "value": 0.11233080905227558
+    },
+    {
+      "start_time": 217.55,
+      "end_time": 219.84,
+      "value": 0.08459652476017059
+    },
+    {
+      "start_time": 219.84,
+      "end_time": 222.13,
+      "value": 0.057575618993393404
+    },
+    {
+      "start_time": 222.13,
+      "end_time": 224.42,
+      "value": 0.03065646913940299
+    },
+    {
+      "start_time": 224.42,
+      "end_time": 226.71,
+      "value": 0
+    },
+    {
+      "start_time": 226.71,
+      "end_time": 229,
+      "value": 0.006038532152114363
+    }
+  ]
 }

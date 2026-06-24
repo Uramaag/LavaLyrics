@@ -661,9 +661,9 @@ async def get_spotify_track_info(url: str, output_dir: str, on_progress=None):
         if on_progress:
             on_progress(80, "Buscando letras en Musixmatch...")
         try:
-            loop = asyncio.get_event_loop()
             # Clean search query for syncedlyrics providers
-            q = f"{artist_name} - {re.sub(r'\\s*[\\(\\[][Ff]eat\\..*?[\\)\\]]', '', track_name).strip()}"
+            clean_track_name = re.sub(r'\s*[\(\[][Ff]eat\..*?[\)\]]', '', track_name).strip()
+            q = f"{artist_name} - {clean_track_name}"
             lrc_content = await loop.run_in_executor(
                 None,
                 lambda: syncedlyrics.search(q, providers=["Musixmatch", "LrcLib"])

@@ -164,6 +164,7 @@ class RenderRequest(BaseModel):
     width: int = 1080
     height: int = 1920
     filename: Optional[str] = None
+    export_settings: dict = {}
 
 class OpenFolderRequest(BaseModel):
     render_id: Optional[str] = None
@@ -283,6 +284,13 @@ async def get_video(path: str, quality: Optional[str] = "proxy"):
             return FileResponse(proxy_path, media_type="video/mp4")
             
     return FileResponse(path, media_type="video/mp4")
+
+@app.get("/api/check_file")
+async def check_file(path: str):
+    if not path:
+        return {"exists": False}
+    return {"exists": os.path.exists(path)}
+
 
 # ── Search ───────────────────────────────────────────────────────────────
 @app.get("/api/search")
@@ -463,6 +471,7 @@ async def render_video(req: RenderRequest):
                 tracks=req.tracks,
                 width=req.width,
                 height=req.height,
+                export_settings=req.export_settings,
                 on_progress=on_progress,
                 on_process_created=on_process_created,
             )

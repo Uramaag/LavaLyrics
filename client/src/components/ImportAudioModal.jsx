@@ -139,8 +139,9 @@ export default function ImportAudioModal({ isOpen, onClose }) {
       setParsedLyrics(parsed)
 
       // Replace audio & lyrics tracks
+      const timestamp = Date.now()
       updateTrack('audio', [{
-        id: 'audio-main-' + Date.now(),
+        id: 'audio-main-' + timestamp,
         type: 'audio',
         start: 0,
         duration: dur,
@@ -148,7 +149,7 @@ export default function ImportAudioModal({ isOpen, onClose }) {
       }])
 
       updateTrack('lyrics', lrc_path ? [{
-        id: 'lyrics-main-' + Date.now(),
+        id: 'lyrics-main-' + timestamp,
         type: 'lyrics',
         start: 0,
         duration: dur,

@@ -82,6 +82,7 @@ function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, i
 
   if (trackName === 'audio_lyrics') {
     const audioWavemap = useAppStore(s => s.audioWavemap || [])
+    const audioDuration = useAppStore(s => s.audioDuration || 0)
     
     return (
       <div
@@ -101,7 +102,12 @@ function TimelineClip({ clip, trackName, pixelsPerSecond, isCutMode, onSelect, i
           {/* Waveform Canvas Overlay in the Audio section */}
           <div className="clip-split-top" style={{ position: 'relative', overflow: 'hidden', height: '50%' }}>
             {audioWavemap.length > 0 && (
-              <WaveformCanvas wavemap={audioWavemap} duration={clip.duration} />
+              <WaveformCanvas 
+                wavemap={audioWavemap} 
+                mediaStart={clip.mediaStart || 0}
+                duration={clip.duration} 
+                audioDuration={audioDuration}
+              />
             )}
             <span style={{ position: 'relative', zIndex: 2, textShadow: '0 1px 2px rgba(0,0,0,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               🎵 Audio ({clip.duration.toFixed(1)}s)
@@ -249,8 +255,11 @@ export default function Timeline({ videoRef, audioRef }) {
     if (clip) {
       window.__copiedClip = JSON.parse(JSON.stringify(clip))
       if (mappedTrack === 'audio') {
-        updateTrack('audio', tracks.audio.filter(c => c.id !== clipId))
-        updateTrack('lyrics', tracks.lyrics.filter(c => c.id !== clipId))
+        const idx = tracks.audio.findIndex(c => c.id === clipId)
+        if (idx !== -1) {
+          updateTrack('audio', tracks.audio.filter((_, i) => i !== idx))
+          updateTrack('lyrics', tracks.lyrics.filter((_, i) => i !== idx))
+        }
       } else {
         updateTrack(mappedTrack, tracks[mappedTrack].filter(c => c.id !== clipId))
       }
@@ -343,8 +352,11 @@ export default function Timeline({ videoRef, audioRef }) {
     saveHistory()
     const mappedTrack = trackName.startsWith('video') ? 'video' : (trackName === 'audio_lyrics' ? 'audio' : trackName)
     if (mappedTrack === 'audio') {
-      updateTrack('audio', tracks.audio.filter(c => c.id !== clipId))
-      updateTrack('lyrics', tracks.lyrics.filter(c => c.id !== clipId))
+      const idx = tracks.audio.findIndex(c => c.id === clipId)
+      if (idx !== -1) {
+        updateTrack('audio', tracks.audio.filter((_, i) => i !== idx))
+        updateTrack('lyrics', tracks.lyrics.filter((_, i) => i !== idx))
+      }
     } else {
       updateTrack(mappedTrack, tracks[mappedTrack].filter(c => c.id !== clipId))
     }
@@ -754,47 +766,56 @@ export default function Timeline({ videoRef, audioRef }) {
 }
 
 // Lightweight component to draw audio waveform peaks on timeline
-function WaveformCanvas({ wavemap, duration }) {
+function WaveformCanvas({ wavemap, mediaStart, duration, audioDuration }) {
   const canvasRef = useRef(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    
+    // Set internal resolution matching DOM size for pixel-perfect drawing
+    const rect = canvas.getBoundingClientRect()
+    const w = rect.width || 1200
+    const h = rect.height || 30
+    canvas.width = w
+    canvas.height = h
 
-    const w = canvas.width
-    const h = canvas.height
+    ctx.clearRect(0, 0, w, h)
+    if (!wavemap || wavemap.length === 0 || !audioDuration) return
+
     const barWidth = 2
     const gap = 1
     const totalBars = Math.floor(w / (barWidth + gap))
 
-    ctx.fillStyle = 'rgba(74, 222, 128, 0.4)' // Waveform bar color (green-neon glow)
+    ctx.fillStyle = 'rgba(74, 222, 128, 0.7)' // Bright neon green with higher opacity
 
-    // Normalize and downsample peaks array to match drawing columns count
-    const step = Math.max(1, Math.floor(wavemap.length / totalBars))
-    
     for (let i = 0; i < totalBars; i++) {
-      const index = i * step
-      if (index >= wavemap.length) break
+      // Map column i to clip playhead time
+      const progress = i / totalBars
+      const clipTime = progress * duration
+      const songTime = mediaStart + clipTime
+
+      // Map song time to wavemap index
+      const wavemapProgress = songTime / audioDuration
+      const index = Math.min(wavemap.length - 1, Math.floor(wavemapProgress * wavemap.length))
       
+      if (index < 0 || index >= wavemap.length) continue
+
       const peak = wavemap[index]
       const val = typeof peak === 'object' ? (peak.value || 0) : (peak || 0)
       
-      // Calculate bar height relative to canvas height
       const barHeight = val * h * 0.95
       const x = i * (barWidth + gap)
       const y = (h - barHeight) / 2
       
       ctx.fillRect(x, y, barWidth, barHeight)
     }
-  }, [wavemap])
+  }, [wavemap, mediaStart, duration, audioDuration])
 
   return (
     <canvas 
       ref={canvasRef} 
-      width={1200} 
-      height={30} 
       style={{ 
         position: 'absolute', 
         inset: 0, 
@@ -802,7 +823,7 @@ function WaveformCanvas({ wavemap, duration }) {
         height: '100%', 
         pointerEvents: 'none',
         zIndex: 1,
-        opacity: 0.8
+        opacity: 0.9
       }} 
     />
   )

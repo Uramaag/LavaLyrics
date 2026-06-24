@@ -218,6 +218,20 @@ export const useAppStore = create((set, get) => ({
       localStorage.setItem('lavalyrics_layers_count', (maxLayer + 1).toString())
     }
 
+    const tracks = projState.tracks || { audio: [], video: [], lyrics: [] }
+    // Clean up negative/orphaned lyrics clips that were caused by previous ID-mismatch bugs
+    if (tracks.audio && tracks.lyrics) {
+      tracks.lyrics = tracks.lyrics.filter(lClip => {
+        return tracks.audio.some(aClip => {
+          const lEnd = lClip.start + lClip.duration
+          const aEnd = aClip.start + aClip.duration
+          const overlapStart = Math.max(lClip.start, aClip.start)
+          const overlapEnd = Math.min(lEnd, aEnd)
+          return overlapEnd - overlapStart > 0.01
+        })
+      })
+    }
+
     set({
       projectName: projState.projectName || '',
       currentJobId: projState.currentJobId || null,
@@ -228,7 +242,7 @@ export const useAppStore = create((set, get) => ({
       bgVideoPath: projState.bgVideoPath || null,
       bgVideoDuration: projState.bgVideoDuration || 0,
       parsedLyrics: projState.parsedLyrics || [],
-      tracks: projState.tracks || { audio: [], video: [], lyrics: [] },
+      tracks,
       clipFilters: projState.clipFilters || {},
       exportSettings: projState.exportSettings || { resolution: '1080x1920', inPoint: 0, outPoint: 15 },
       audioWavemap: projState.audioWavemap || [],

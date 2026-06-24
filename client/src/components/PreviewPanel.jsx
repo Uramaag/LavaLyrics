@@ -95,9 +95,11 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
     }
   }, [bgVideoPath, bgVideoBlobUrl, previewQuality]) // eslint-disable-line
 
-  // Compute current lyric directly from parsedLyrics timeline if a lyrics clip is present on the timeline at masterTime
-  const hasLyricsClip = tracks.lyrics.some(c => masterTime >= c.start && masterTime < c.start + c.duration)
-  const currentLyrics = hasLyricsClip ? getLyricsAtTime(parsedLyrics, masterTime) : null
+  // Compute current lyric from parsedLyrics timeline, applying lyrics offset (mediaStart) if present
+  const activeLyricsClip = tracks.lyrics.find(c => masterTime >= c.start && masterTime < c.start + c.duration)
+  const currentLyrics = activeLyricsClip 
+    ? getLyricsAtTime(parsedLyrics, masterTime - activeLyricsClip.start - (activeLyricsClip.mediaStart || 0)) 
+    : null
 
   // Compute video CSS filter from selected clip
   const videoFilter = useCallback(() => {
@@ -239,9 +241,26 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
         </div>
       </div>
 
-      <div className="preview-canvas-area" style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '16px 16px 8px', gap: '16px' }}>
-        <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-          {/* Video con zoom aplicado */}
+      <div className="preview-canvas-area" style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '16px 16px 8px', gap: '16px', background: 'var(--bg-deep)' }}>
+        
+        {/* Symmetrical 9:16 Phone Viewport Container */}
+        <div 
+          className="preview-viewport"
+          style={{
+            position: 'relative',
+            aspectRatio: '9/16',
+            height: '100%',
+            backgroundColor: '#000',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-xl)',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
+          {/* Video with cover aspect fitting */}
           <video
             ref={videoRef}
             muted
@@ -251,13 +270,17 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
             onPlaying={() => setIsVideoLoading(false)}
             onCanPlay={() => setIsVideoLoading(false)}
             onSeeked={() => setIsVideoLoading(false)}
+            onCanPlayThrough={() => setIsVideoLoading(false)}
+            onSuspend={() => setIsVideoLoading(false)}
+            onAbort={() => setIsVideoLoading(false)}
+            onEmptied={() => setIsVideoLoading(false)}
+            onStalled={() => setIsVideoLoading(false)}
+            onError={() => setIsVideoLoading(false)}
             style={{ 
-              maxHeight: '100%', 
-              maxWidth: '100%', 
+              width: '100%', 
+              height: '100%', 
               filter: activeVideoFilter(),
-              objectFit: 'contain',
-              borderRadius: 'var(--radius-md)',
-              boxShadow: 'var(--shadow-lg)',
+              objectFit: 'cover',
               transform: zoomLevel !== 1 ? `scale(${zoomLevel})` : undefined,
               transformOrigin: `${zoomOrigin.x * 100}% ${zoomOrigin.y * 100}%`,
               transition: 'transform 0.15s ease',
@@ -276,7 +299,6 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
               justifyContent: 'center',
               gap: '10px',
               zIndex: 10,
-              borderRadius: 'var(--radius-md)'
             }}>
               <div style={{
                 width: '32px',
@@ -290,83 +312,76 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
             </div>
           )}
 
-          {/* Guides Overlay Rendered Mathematically inside Video Frame Aspect Box */}
+          {/* Guides Overlay aligned directly to the viewport bounds */}
           {guidesEnabled && (
             <div style={{
               position: 'absolute',
               inset: 0,
               pointerEvents: 'none',
               zIndex: 8,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
             }}>
-              {/* Contenedor que simula la relación de aspecto 9:16 vertical de tiktok del reproductor */}
-              <div style={{
-                position: 'relative',
-                width: '100%',
-                maxWidth: '300px',
-                height: '100%',
-                maxHeight: '533px',
-                boxSizing: 'border-box'
-              }}>
-                {/* 1. Safe Margins for TikTok (9:16) */}
-                {showSafeMargins && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '10%',
-                    bottom: '15%',
-                    left: '8%',
-                    right: '12%',
-                    border: `1.5px dashed ${safeMarginsColor}`,
-                    boxSizing: 'border-box'
-                  }}>
-                    <span style={{ position: 'absolute', top: -14, left: 2, fontSize: '9px', color: safeMarginsColor, background: '#000', padding: '0 2px' }}>Margen Seguro Redes</span>
-                  </div>
-                )}
+              {/* 1. Symmetrical Safe Margins for Vertical Video (9:16) */}
+              {showSafeMargins && (
+                <div style={{
+                  position: 'absolute',
+                  top: '10%',
+                  bottom: '15%',
+                  left: '10%',
+                  right: '10%',
+                  border: `1.5px dashed ${safeMarginsColor}`,
+                  boxSizing: 'border-box'
+                }}>
+                  <span style={{ position: 'absolute', top: -14, left: 2, fontSize: '9px', color: safeMarginsColor, background: '#000', padding: '0 2px' }}>Margen Seguro</span>
+                </div>
+              )}
 
-                {/* 2. Rule of Thirds Grid */}
-                {showRuleOfThirds && (
-                  <div style={{ position: 'absolute', inset: 0, boxSizing: 'border-box' }}>
-                    {/* Vertical Lines */}
-                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: '33.33%', width: '1px', borderLeft: `1px solid ${ruleOfThirdsColor}`, opacity: 0.8 }} />
-                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: '66.66%', width: '1px', borderLeft: `1px solid ${ruleOfThirdsColor}`, opacity: 0.8 }} />
-                    {/* Horizontal Lines */}
-                    <div style={{ position: 'absolute', left: 0, right: 0, top: '33.33%', height: '1px', borderTop: `1px solid ${ruleOfThirdsColor}`, opacity: 0.8 }} />
-                    <div style={{ position: 'absolute', left: 0, right: 0, top: '66.66%', height: '1px', borderTop: `1px solid ${ruleOfThirdsColor}`, opacity: 0.8 }} />
-                  </div>
-                )}
+              {/* 2. Rule of Thirds Grid */}
+              {showRuleOfThirds && (
+                <div style={{ position: 'absolute', inset: 0 }}>
+                  {/* Vertical Lines */}
+                  <div style={{ position: 'absolute', top: 0, bottom: 0, left: '33.33%', width: '1px', borderLeft: `1px solid ${ruleOfThirdsColor}`, opacity: 0.6 }} />
+                  <div style={{ position: 'absolute', top: 0, bottom: 0, left: '66.66%', width: '1px', borderLeft: `1px solid ${ruleOfThirdsColor}`, opacity: 0.6 }} />
+                  {/* Horizontal Lines */}
+                  <div style={{ position: 'absolute', left: 0, right: 0, top: '33.33%', height: '1px', borderTop: `1px solid ${ruleOfThirdsColor}`, opacity: 0.6 }} />
+                  <div style={{ position: 'absolute', left: 0, right: 0, top: '66.66%', height: '1px', borderTop: `1px solid ${ruleOfThirdsColor}`, opacity: 0.6 }} />
+                </div>
+              )}
 
-                {/* 3. Center split lines */}
-                {showCenterSplit && (
-                  <div style={{ position: 'absolute', inset: 0, boxSizing: 'border-box' }}>
-                    {/* Vertical Split */}
-                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: '1px', borderLeft: `1.5px dotted ${centerSplitColor}`, opacity: 0.9 }} />
-                    {/* Horizontal Split */}
-                    <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: '1px', borderTop: `1.5px dotted ${centerSplitColor}`, opacity: 0.9 }} />
-                  </div>
-                )}
-              </div>
+              {/* 3. Center split lines */}
+              {showCenterSplit && (
+                <div style={{ position: 'absolute', inset: 0 }}>
+                  {/* Vertical Split */}
+                  <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: '1px', borderLeft: `1.5px dotted ${centerSplitColor}`, opacity: 0.7 }} />
+                  {/* Horizontal Split */}
+                  <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: '1px', borderTop: `1.5px dotted ${centerSplitColor}`, opacity: 0.7 }} />
+                </div>
+              )}
             </div>
           )}
 
           {/* Hidden audio element */}
           <audio ref={audioRef} style={{ display: 'none' }} crossOrigin="anonymous" />
 
-          {/* Lyrics overlay - centrado absoluto sobre el video */}
+          {/* Lyrics overlay - perfectly aligned and centered inside safe margins */}
           <div
             className="preview-lyrics-overlay"
             style={{
               position: 'absolute',
-              inset: 0,
-              pointerEvents: 'none',
+              top: '10%',
+              bottom: '15%',
+              left: '10%',
+              right: '10%',
+              transform: 'none',
+              width: 'auto',
+              maxWidth: 'none',
+              height: 'auto',
               zIndex: 9,
+              gap: `${lyricGap}px`,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '8px 16px',
-              gap: `${lyricGap}px`,
+              pointerEvents: 'none',
               boxSizing: 'border-box',
             }}
           >
@@ -386,7 +401,7 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
           </div>
         </div>
 
-        {/* Real-time Decibel VU Meter Panel */}
+        {/* Real-time Decibel VU Meter Panel - outside the phone container */}
         <VUMeter audioRef={audioRef} isPlaying={isPlaying} />
 
         {/* Mini-map de zoom */}

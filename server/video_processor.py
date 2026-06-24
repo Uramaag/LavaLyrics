@@ -24,21 +24,35 @@ def parse_lrc(lrc_path: str):
 
 
 def generate_ass_subtitle(lrc_path: str, output_ass: str, start_time: float, duration: float,
-                           lyrics_blocks: list, width: int = 1080, height: int = 1920):
+                           lyrics_blocks: list, width: int = 1080, height: int = 1920, export_settings: dict = None):
     lrc_events = parse_lrc(lrc_path)
     new_subs = pysubs2.SSAFile()
 
+    if not export_settings:
+        export_settings = {}
+
+    font_name = export_settings.get("fontName", "Montserrat")
+    font_size_config = export_settings.get("fontSize", 28)
+    lyric_gap_config = export_settings.get("lyricGap", 16)
+    prev_next_scale = export_settings.get("prevNextScale", 0.7)
+
+    # Scale style.fontsize relative to video height (using baseline preview height of 640px)
+    # style.fontsize = height * (font_size_config / 640.0)
     style = pysubs2.SSAStyle()
-    style.fontname = "Montserrat"
-    style.fontsize = max(14, int(height * 0.032))
+    style.fontname = font_name
+    style.fontsize = max(14, int(height * (font_size_config / 640.0)))
     style.primarycolor = pysubs2.Color(255, 255, 255, 0)
     style.outlinecolor = pysubs2.Color(0, 0, 0, 0)
     style.backcolor = pysubs2.Color(0, 0, 0, 128)
     style.bold = True
     style.alignment = 5
     style.marginv = int(height * 0.04)
-    style.outline = 1.8
-    style.shadow = 1.5
+
+    # Scale outline and shadow proportionally to font size
+    # Baseline: outline=1.8 and shadow=1.5 for a 61px font (height=1920 * 0.032)
+    scale_factor = style.fontsize / 61.44
+    style.outline = max(1.0, round(1.8 * scale_factor, 1))
+    style.shadow = max(1.0, round(1.5 * scale_factor, 1))
     new_subs.styles["Default"] = style
 
     for block in lyrics_blocks:
@@ -46,17 +60,20 @@ def generate_ass_subtitle(lrc_path: str, output_ass: str, start_time: float, dur
         dur = block["duration"]
         media_start = block["mediaStart"]
 
-        start_ms = int(media_start * 1000)
-        end_ms = int((media_start + dur) * 1000)
+        # Positive media_start delays the lyrics (starts later), negative advances (starts earlier)
+        # lrc_time + media_start = timeline_time
+        # so lrc_time falls in [-media_start, dur - media_start]
+        start_boundary_ms = -int(media_start * 1000)
+        end_boundary_ms = int((dur - media_start) * 1000)
 
         for i, lrc in enumerate(lrc_events):
-            if lrc["end"] > start_ms and lrc["start"] < end_ms:
+            if lrc["end"] > start_boundary_ms and lrc["start"] < end_boundary_ms:
                 past = lrc_events[i - 1]["text"] if i > 0 else ""
                 current = lrc["text"]
                 nxt = lrc_events[i + 1]["text"] if i < len(lrc_events) - 1 else ""
 
-                rel_start = max(0, lrc["start"] - start_ms)
-                rel_end = min(dur * 1000, lrc["end"] - start_ms)
+                rel_start = max(0, lrc["start"] + int(media_start * 1000))
+                rel_end = min(dur * 1000, lrc["end"] + int(media_start * 1000))
                 
                 # Shift events relative to start_time of the export window
                 event_start = int(start_timeline * 1000) + rel_start - int(start_time * 1000)
@@ -69,12 +86,21 @@ def generate_ass_subtitle(lrc_path: str, output_ass: str, start_time: float, dur
                     event_dur = event_end_clamped - event_start_clamped
 
                     pop_dur = min(250, int(event_dur))
-                    spacing_size = int(style.fontsize * 0.45)
+                    
+                    # Calculate gap spacing size relative to font size:
+                    # In React, gap in px = lyric_gap_config. Font size in px = font_size_config.
+                    # Ratio = lyric_gap_config / font_size_config.
+                    # In ASS, spacing_size = style.fontsize * (lyric_gap_config / font_size_config).
+                    spacing_ratio = float(lyric_gap_config) / max(1, font_size_config)
+                    spacing_size = int(style.fontsize * spacing_ratio)
                     spaced_break = r"\N{\fs%d} \N" % spacing_size
+
+                    # Scale percent for past/next lines
+                    scale_pct = int(prev_next_scale * 100)
 
                     lines_ass = []
                     if past:
-                        lines_ass.append(r"{\r\alpha&H99&\fscx80\fscy80}" + past + r"{\r}")
+                        lines_ass.append(r"{\r\alpha&H99&\fscx%d\fscy%d}" % (scale_pct, scale_pct) + past + r"{\r}")
                     
                     # Dynamic pop-in animation mimicking React preview's spring pop
                     lines_ass.append(
@@ -83,7 +109,7 @@ def generate_ass_subtitle(lrc_path: str, output_ass: str, start_time: float, dur
                     )
                     
                     if nxt:
-                        lines_ass.append(r"{\r\alpha&H99&\fscx80\fscy80}" + nxt + r"{\r}")
+                        lines_ass.append(r"{\r\alpha&H99&\fscx%d\fscy%d}" % (scale_pct, scale_pct) + nxt + r"{\r}")
 
                     # Styled multi-line breaks for interline spacing
                     full_text = spaced_break.join(lines_ass)
@@ -272,6 +298,7 @@ def process_video(
     tracks: dict = None,
     width: int = 1080,
     height: int = 1920,
+    export_settings: dict = None,
     on_progress=None,
     on_process_created=None,
 ):
@@ -293,7 +320,7 @@ def process_video(
     ass_path = None
     if lrc_path and lyrics_blocks:
         ass_path = os.path.join(output_dir, f"subs_{out_id}.ass")
-        generate_ass_subtitle(lrc_path, ass_path, start_time, duration, lyrics_blocks, width, height)
+        generate_ass_subtitle(lrc_path, ass_path, start_time, duration, lyrics_blocks, width, height, export_settings)
 
     import imageio_ffmpeg
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
