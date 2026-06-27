@@ -548,285 +548,55 @@ ApplicationWindow {
 
                 SplitView {
                     anchors.fill: parent
-                    orientation: Qt.Horizontal
+                    orientation: Qt.Vertical
 
-                    // ── Left sidebar ───────────────────────────────────────
-                    Rectangle {
-                        SplitView.preferredWidth: 280
-                        SplitView.minimumWidth:   200
-                        color: window.bgDark
-                        border.color: window.borderSubtle; border.width: 1
+                    // ── SECCIÓN SUPERIOR (Inspector vs Previsualización) ──
+                    SplitView {
+                        SplitView.preferredHeight: parent.height * 0.58
+                        SplitView.minimumHeight: 220
+                        orientation: Qt.Horizontal
 
-                        ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 12; spacing: 12
-
-                            Text { text: "Biblioteca"; font.pixelSize: 13; font.bold: true; color: window.textPrimary }
-
-                            // Audio file card
-                            Rectangle {
-                                Layout.fillWidth: true; height: 76
-                                color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 8
-                                Column {
-                                    anchors.centerIn: parent; spacing: 4
-                                    Text { text: "🎵 Audio"; font.bold: true; color: window.textPrimary; font.pixelSize: 12; anchors.horizontalCenter: parent.horizontalCenter }
-                                    Text {
-                                        text: mediaEngine.mediaPath !== "" ? mediaEngine.mediaPath.split("/").pop().split("\\").pop() : "Sin audio cargado"
-                                        color: window.textMuted; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter
-                                        elide: Text.ElideRight; width: 240
-                                    }
-                                    Text {
-                                        text: mediaEngine.duration > 0 ? "⏱ " + mediaEngine.formatTime(mediaEngine.duration) : ""
-                                        color: window.lavaRed; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter
-                                    }
-                                }
-                                MouseArea { anchors.fill: parent; onClicked: openMediaDialog.open() }
-                            }
-
-                            // Lyrics card
-                            Rectangle {
-                                Layout.fillWidth: true; height: 62
-                                color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 8
-                                Column {
-                                    anchors.centerIn: parent; spacing: 4
-                                    Text { text: "📝 Letras"; font.bold: true; color: window.textPrimary; font.pixelSize: 12; anchors.horizontalCenter: parent.horizontalCenter }
-                                    Text {
-                                        text: lyricsLoader.isLoaded ? "✅ " + lyricsLoader.getAllLines().length + " líneas cargadas" : "Sin letras"
-                                        color: lyricsLoader.isLoaded ? "#4caf50" : window.textMuted
-                                        font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter
-                                    }
-                                }
-                                MouseArea { anchors.fill: parent; onClicked: openLyricsDialog.open() }
-                            }
-
-                            // Lyrics list preview
-                            Text { text: "Líneas de letras"; color: window.textMuted; font.pixelSize: 11 }
-                            ListView {
-                                Layout.fillWidth: true; Layout.fillHeight: true
-                                clip: true
-                                model: lyricsLoader.getAllLines()
-                                currentIndex: lyricsLoader.currentIndex
-
-                                delegate: Rectangle {
-                                    width: ListView.view.width; height: 32
-                                    color: lyricsLoader.currentIndex === index ? window.bgElevated : "transparent"
-                                    border.color: lyricsLoader.currentIndex === index ? window.lavaRed : "transparent"
-                                    border.width: 1; radius: 4
-
-                                    Row {
-                                        anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 8; spacing: 8
-                                        Text {
-                                            text: {
-                                                let ms = modelData.timeMs; let s = Math.floor(ms/1000); let m = Math.floor(s/60)
-                                                return String(m).padStart(2,'0') + ":" + String(s%60).padStart(2,'0')
-                                            }
-                                            color: window.textMuted; font.pixelSize: 10; font.family: "Consolas"
-                                        }
-                                        Text { text: modelData.text; color: lyricsLoader.currentIndex === index ? window.textPrimary : window.textSecondary; font.pixelSize: 11; elide: Text.ElideRight; width: 170 }
-                                    }
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Center)
-                                }
-                            }
-                        }
-                    }
-
-                    // ── Center: Viewport + Controls ────────────────────────
-                    ColumnLayout {
-                        SplitView.fillWidth: true
-                        spacing: 0
-
-                        // Video viewport area
+                        // [Cuadrante Izquierda Arriba] Inspector
                         Rectangle {
-                            Layout.fillWidth: true; Layout.fillHeight: true
-                            color: window.bgDeep
-
-                            // 9:16 phone container
-                            Item {
-                                id: phoneContainer
-                                anchors.centerIn: parent
-                                height: Math.min(parent.height - 16, 600)
-                                width: height * 9 / 16
-
-                                Rectangle {
-                                    anchors.fill: parent; radius: 16; clip: true
-                                    color: "#000"
-                                    border.color: window.borderSubtle; border.width: 1
-
-                                    // Video frame placeholder / real frame via Image
-                                    Rectangle {
-                                        anchors.fill: parent; color: "#080808"
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: mediaEngine.mediaPath === "" ? "🎬\nArrasta un video\nal timeline" : "▶ Preview"
-                                            color: window.textMuted; font.pixelSize: 14
-                                            horizontalAlignment: Text.AlignHCenter
-                                            wrapMode: Text.WordWrap
-                                        }
-                                    }
-
-                                    // Safe zone overlay
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        anchors.topMargin: parent.height * 0.10
-                                        anchors.bottomMargin: parent.height * 0.15
-                                        anchors.leftMargin: parent.width * 0.06
-                                        anchors.rightMargin: parent.width * 0.06
-                                        color: "transparent"
-                                        border.color: "#ff3e3e33"; border.width: 1
-                                    }
-
-                                    // Lyrics overlay
-                                    Column {
-                                        anchors.centerIn: parent
-                                        width: parent.width * 0.86
-                                        spacing: 10
-
-                                        Text {
-                                            text: lyricsLoader.prevLine
-                                            width: parent.width; horizontalAlignment: Text.AlignHCenter
-                                            font.pixelSize: phoneContainer.height * 0.026
-                                            font.bold: true; color: "#888"; wrapMode: Text.WordWrap
-                                            opacity: 0.7
-                                            style: Text.Outline; styleColor: "#000"
-                                        }
-                                        Text {
-                                            text: lyricsLoader.currentLine !== "" ? lyricsLoader.currentLine : "♪"
-                                            width: parent.width; horizontalAlignment: Text.AlignHCenter
-                                            font.pixelSize: phoneContainer.height * 0.045
-                                            font.bold: true; color: "#ffffff"; wrapMode: Text.WordWrap
-                                            style: Text.Outline; styleColor: "#000000"
-
-                                            Behavior on text {
-                                                SequentialAnimation {
-                                                    NumberAnimation { target: lyricsLine; property: "scale"; to: 0.9; duration: 80 }
-                                                    NumberAnimation { target: lyricsLine; property: "scale"; to: 1.0; duration: 120; easing.type: Easing.OutBack }
-                                                }
-                                            }
-                                            id: lyricsLine
-                                        }
-                                        Text {
-                                            text: lyricsLoader.nextLine
-                                            width: parent.width; horizontalAlignment: Text.AlignHCenter
-                                            font.pixelSize: phoneContainer.height * 0.026
-                                            font.bold: true; color: "#888"; wrapMode: Text.WordWrap
-                                            opacity: 0.7
-                                            style: Text.Outline; styleColor: "#000"
-                                        }
-                                    }
-
-                                    // Time overlay (top-left)
-                                    Text {
-                                        anchors.top: parent.top; anchors.left: parent.left
-                                        anchors.margins: 8
-                                        text: mediaEngine.formatTime(mediaEngine.position) + " / " + mediaEngine.formatTime(mediaEngine.duration)
-                                        color: "#ffffff80"; font.pixelSize: 10; font.family: "Consolas"
-                                    }
-                                }
-                            }
-                        }
-
-                        // Transport controls
-                        Rectangle {
-                            Layout.fillWidth: true; height: 60
+                            SplitView.preferredWidth: 300
+                            SplitView.minimumWidth: 180
                             color: window.bgDark
                             border.color: window.borderSubtle; border.width: 1
 
                             ColumnLayout {
-                                anchors.fill: parent; anchors.margins: 8; spacing: 4
+                                anchors.fill: parent; anchors.margins: 12; spacing: 10
+                                Text { text: "🔍 Inspector"; font.pixelSize: 13; font.bold: true; color: window.textPrimary }
+                                Rectangle { Layout.fillWidth: true; height: 1; color: window.borderSubtle }
+                                Text { text: "Detalles del Proyecto"; color: window.textSecondary; font.pixelSize: 11; font.bold: true }
+                                Text { text: "Nombre: " + projectMgr.projectName; color: window.textMuted; font.pixelSize: 11 }
+                                Text { text: "Archivo: " + (projectMgr.projectPath === "" ? "Sin guardar" : projectMgr.projectPath.split("/").pop()); color: window.textMuted; font.pixelSize: 11 }
+                                Text { text: "Ruta completa:"; color: window.textSecondary; font.pixelSize: 10 }
+                                Text { text: projectMgr.projectPath; color: window.textMuted; font.pixelSize: 9; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+                                Item { Layout.fillHeight: true }
+                            }
+                        }
 
-                                // Seek bar
-                                Slider {
-                                    id: seekBar
-                                    Layout.fillWidth: true; height: 16
-                                    from: 0; to: Math.max(1, mediaEngine.duration)
-                                    value: mediaEngine.position
-                                    enabled: mediaEngine.duration > 0
+                        // [Cuadrante Derecha Arriba] Previsualización (Preview)
+                        Rectangle {
+                            SplitView.fillWidth: true
+                            color: window.bgDeep
+                            border.color: window.borderSubtle; border.width: 1
 
-                                    onMoved: mediaEngine.seek(value)
+                            ColumnLayout {
+                                anchors.fill: parent; spacing: 0
 
-                                    background: Rectangle {
-                                        x: seekBar.leftPadding; y: seekBar.topPadding + seekBar.availableHeight / 2 - height / 2
-                                        width: seekBar.availableWidth; height: 4; radius: 2
-                                        color: window.bgElevated
+                                // Video viewport area
+                                Rectangle {
+                                    Layout.fillWidth: true; Layout.fillHeight: true; color: "transparent"
+
+                                    // 9:16 phone container
+                                    Item {
+                                        id: phoneContainer
+                                        anchors.centerIn: parent
+                                        height: Math.min(parent.height - 16, 500)
+                                        width: height * 9 / 16
+
                                         Rectangle {
-                                            width: seekBar.visualPosition * parent.width; height: parent.height; radius: 2
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0; color: window.lavaRed }
-                                                GradientStop { position: 1; color: window.lavaOrange }
-                                            }
-                                        }
-                                    }
-                                    handle: Rectangle {
-                                        x: seekBar.leftPadding + seekBar.visualPosition * seekBar.availableWidth - width / 2
-                                        y: seekBar.topPadding + seekBar.availableHeight / 2 - height / 2
-                                        width: 14; height: 14; radius: 7
-                                        color: window.lavaRed
-                                        border.color: "#fff"; border.width: 1
-                                    }
-                                }
-
-                                // Playback buttons
-                                RowLayout {
-                                    Layout.alignment: Qt.AlignHCenter; spacing: 8
-                                    Repeater {
-                                        model: [
-                                            {text: "⏮", tip: "Inicio"},
-                                            {text: "⏪", tip: "-10s"},
-                                            {text: mediaEngine.isPlaying ? "⏸" : "▶", tip: "Play/Pausa", big: true},
-                                            {text: "⏩", tip: "+10s"},
-                                            {text: "⏭", tip: "Fin"},
-                                        ]
-                                        Button {
-                                            text: modelData.text
-                                            implicitWidth: modelData.big ? 48 : 36; implicitHeight: 32
-                                            ToolTip.visible: hovered; ToolTip.text: modelData.tip
-                                            onClicked: {
-                                                if      (index === 0) mediaEngine.seek(0)
-                                                else if (index === 1) mediaEngine.seek(Math.max(0, mediaEngine.position - 10))
-                                                else if (index === 2) mediaEngine.isPlaying ? mediaEngine.pause() : mediaEngine.play()
-                                                else if (index === 3) mediaEngine.seek(Math.min(mediaEngine.duration, mediaEngine.position + 10))
-                                                else if (index === 4) mediaEngine.seek(mediaEngine.duration)
-                                            }
-                                            contentItem: Text { text: parent.text; color: window.textPrimary; font.pixelSize: modelData.big ? 18 : 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                            background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; radius: 6 }
-                                        }
-                                    }
-
-                                    // Volume slider
-                                    Text { text: "🔊"; color: window.textMuted; font.pixelSize: 12 }
-                                    Slider {
-                                        id: volSlider; from: 0; to: 1; value: mediaEngine.volume
-                                        implicitWidth: 80; implicitHeight: 20
-                                        onMoved: mediaEngine.volume = value
-                                        background: Rectangle {
-                                            x: volSlider.leftPadding; y: volSlider.topPadding + volSlider.availableHeight/2 - height/2
-                                            width: volSlider.availableWidth; height: 3; radius: 2; color: window.bgElevated
-                                            Rectangle { width: volSlider.visualPosition * parent.width; height: parent.height; radius: 2; color: window.textSecondary }
-                                        }
-                                        handle: Rectangle {
-                                            x: volSlider.leftPadding + volSlider.visualPosition * volSlider.availableWidth - width/2
-                                            y: volSlider.topPadding + volSlider.availableHeight/2 - height/2
-                                            width: 10; height: 10; radius: 5; color: window.textSecondary
-                                        }
-                                    }
-
-                                    // Zoom
-                                    Text { text: "🔍"; color: window.textMuted; font.pixelSize: 12; Layout.leftMargin: 8 }
-                                    Slider {
-                                        from: 20; to: 300; value: timelineScale
-                                        implicitWidth: 80; implicitHeight: 20
-                                        onMoved: timelineScale = value
-                                        background: Rectangle {
-                                            x: parent.leftPadding; y: parent.topPadding + parent.availableHeight/2 - height/2
-                                            width: parent.availableWidth; height: 3; radius: 2; color: window.bgElevated
-                                            Rectangle { width: parent.parent.visualPosition * parent.width; height: parent.height; radius: 2; color: window.textMuted }
-                                        }
-                                        handle: Rectangle {
-                                            x: parent.leftPadding + parent.visualPosition * parent.availableWidth - width/2
-                                            y: parent.topPadding + parent.availableHeight/2 - height/2
                                             width: 10; height: 10; radius: 5; color: window.textMuted
                                         }
                                     }

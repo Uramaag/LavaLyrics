@@ -51,9 +51,9 @@ bool ProjectManager::saveProject(const QString &path)
         return false;
     }
 
-    // Ensure .llproj extension
-    if (!savePath.endsWith(".llproj"))
-        savePath += ".llproj";
+    // Ensure .lavalyrics extension
+    if (!savePath.endsWith(".lavalyrics"))
+        savePath += ".lavalyrics";
 
     m_data["savedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
     m_data["name"]    = m_projectName;
