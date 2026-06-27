@@ -315,10 +315,17 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 40
                     enabled: nameField.text.trim() !== ""
                     onClicked: {
-                        projectMgr.newProject(nameField.text.trim())
-                        outDirField.text = workspaceDirField.text.trim()
+                        let rawName = nameField.text.trim()
+                        // Strip any manually entered extension to avoid .lavalyrics.lavalyrics
+                        let cleanName = rawName.replace(/\.lavalyrics$/, "").replace(/\.llproj$/, "")
+                        let workspace = workspaceDirField.text.trim()
+                        let fileSavePath = workspace + "/" + cleanName + ".lavalyrics"
+                        
+                        projectMgr.newProject(cleanName)
+                        projectMgr.saveProject(fileSavePath)
+                        
                         createProjectDialog.close()
-                        currentScreen = 2 // Go directly to Editor screen (skipping download screen)
+                        currentScreen = 2 // Go directly to Editor screen
                     }
                     contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     background: Rectangle {
