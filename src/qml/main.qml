@@ -419,8 +419,9 @@ ApplicationWindow {
                             TextField {
                                 id: outDirField
                                 Layout.fillWidth: true
-                                text: "C:/Users/" + Qt.platform.os + "/Music/LavaLyrics"
-                                color: window.textSecondary; background: Item {}; font.pixelSize: 12
+                                color: window.textSecondary
+                                background: Item {}
+                                font.pixelSize: 12
                                 placeholderTextColor: window.textMuted
                                 placeholderText: "Carpeta de destino"
                             }
