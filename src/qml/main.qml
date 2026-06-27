@@ -41,6 +41,10 @@ ApplicationWindow {
     property int    currentScreen: 0   // 0=home, 1=download, 2=editor
     property double zoomLevel:     1.0
     property double timelineScale: 80  // px per second
+    QtObject {
+        id: outDirField
+        property string text: "C:/Users/" + Qt.platform.os + "/Documents/LavaLyricsProjects/ACALOSPROJECTOS"
+    }
 
     background: Rectangle { color: window.bgDeep }
 
@@ -221,6 +225,64 @@ ApplicationWindow {
         }
     }
 
+    // ── Download progress dialog ───────────────────────────────────────────
+    Window {
+        id: downloadProgressDialog
+        visible: downloader.isDownloading
+        width: 440; height: 260
+        title: "Descargando música..."
+        flags: Qt.Dialog | Qt.WindowTitleHint
+        color: window.bgDark
+        modality: Qt.ApplicationModal
+
+        ColumnLayout {
+            anchors.centerIn: parent
+            width: parent.width - 48
+            spacing: 20
+
+            Text {
+                text: "📥 Descargando audio y letras"
+                font.pixelSize: 18; font.bold: true
+                color: window.textPrimary
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Text {
+                text: downloader.statusMessage
+                font.pixelSize: 13; color: window.textSecondary
+                Layout.alignment: Qt.AlignHCenter
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+            }
+            Rectangle {
+                Layout.fillWidth: true; height: 8
+                color: window.bgElevated; radius: 4
+                Rectangle {
+                    width: parent.width * downloader.progress / 100
+                    height: parent.height; radius: 4
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0; color: window.lavaRed }
+                        GradientStop { position: 1; color: window.lavaOrange }
+                    }
+                    Behavior on width { NumberAnimation { duration: 300 } }
+                }
+            }
+            Text {
+                text: downloader.progress + "%"
+                font.pixelSize: 24; font.bold: true; color: window.lavaRed
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Button {
+                text: "Cancelar"
+                Layout.alignment: Qt.AlignHCenter
+                onClicked: { downloader.cancel(); downloadProgressDialog.visible = false }
+                contentItem: Text { text: parent.text; color: window.textSecondary; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1; radius: 6 }
+            }
+        }
+    }
+
     // ── Platform Audio & Lyrics Search Dialog Modal ─────────────────────────
     Window {
         id: platformSearchDialog
@@ -320,6 +382,7 @@ ApplicationWindow {
                             placeholderText: "Nombre de canción, artista o álbum..."
                             color: window.textPrimary; placeholderTextColor: window.textMuted
                             font.pixelSize: 12
+                            onTextChanged: debounceTimer.restart()
                             onAccepted: platformSearchDialog.search()
                         }
                         Button {
@@ -339,6 +402,13 @@ ApplicationWindow {
                     contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 6 }
                 }
+            }
+
+            Timer {
+                id: debounceTimer
+                interval: 1000
+                repeat: false
+                onTriggered: platformSearchDialog.search()
             }
 
             // Filter checkbox row
