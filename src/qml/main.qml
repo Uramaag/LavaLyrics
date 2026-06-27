@@ -82,7 +82,38 @@ ApplicationWindow {
         }
     }
 
+    Connections {
+        target: projectMgr
+        function onProjectLoaded(data) {
+            statusBar.showMsg("📂 Proyecto cargado: " + projectMgr.projectName)
+            
+            // Re-load tracks if any
+            if (data.mediaPath && data.mediaPath !== "") {
+                mediaEngine.loadMedia(data.mediaPath)
+            }
+            if (data.lyricsPath && data.lyricsPath !== "") {
+                if (data.lyricsPath.endsWith(".lrc")) lyricsLoader.loadLrc(data.lyricsPath)
+                else lyricsLoader.loadJson(data.lyricsPath)
+            }
+            
+            currentScreen = 2 // Go to Editor
+        }
+        function onErrorOccurred(message) {
+            statusBar.showMsg("❌ Error del Proyecto: " + message)
+        }
+    }
+
     // ── File dialogs ───────────────────────────────────────────────────────
+    FileDialog {
+        id: loadProjectDialog
+        title: "Abrir Proyecto LavaLyrics"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["LavaLyrics Projects (*.lavalyrics *.llproj)"]
+        onAccepted: {
+            projectMgr.loadProject(selectedFile.toString().replace("file:///", ""))
+        }
+    }
+
     FileDialog {
         id: openMediaDialog
         title: "Abrir archivo de audio/video"
@@ -435,48 +466,97 @@ ApplicationWindow {
                         }
                     }
 
-                    // Main Action Area (Nuevo Proyecto Card)
-                    Rectangle {
-                        width: 280; height: 160
-                        color: window.bgCard
-                        border.color: newProjectMouse.containsMouse ? window.lavaRed : window.borderSubtle
-                        border.width: 1; radius: 12
+                    // Main Action Area (Nuevo / Abrir Proyecto Cards)
+                    RowLayout {
                         Layout.alignment: Qt.AlignHCenter
-                        
-                        // Glow effect
+                        spacing: 24
+
+                        // Nuevo Proyecto Card
                         Rectangle {
-                            anchors.fill: parent; radius: 12; z: -1
-                            color: "transparent"; border.color: window.lavaRed; border.width: 2
-                            opacity: newProjectMouse.containsMouse ? 0.3 : 0
+                            width: 260; height: 150
+                            color: window.bgCard
+                            border.color: newProjectMouse.containsMouse ? window.lavaRed : window.borderSubtle
+                            border.width: 1; radius: 12
+                            
+                            // Glow effect
+                            Rectangle {
+                                anchors.fill: parent; radius: 12; z: -1
+                                color: "transparent"; border.color: window.lavaRed; border.width: 2
+                                opacity: newProjectMouse.containsMouse ? 0.3 : 0
+                            }
+
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: 10
+                                Text {
+                                    text: "➕"
+                                    font.pixelSize: 32
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                                Text {
+                                    text: "NUEVO PROYECTO"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: window.textPrimary
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                                Text {
+                                    text: "Comienza una nueva creación"
+                                    font.pixelSize: 10
+                                    color: window.textMuted
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                            }
+
+                            MouseArea {
+                                id: newProjectMouse
+                                anchors.fill: parent; hoverEnabled: true
+                                onClicked: createProjectDialog.open()
+                            }
                         }
 
-                        Column {
-                            anchors.centerIn: parent
-                            spacing: 12
-                            Text {
-                                text: "➕"
-                                font.pixelSize: 36
-                                anchors.horizontalCenter: parent.horizontalCenter
+                        // Abrir Proyecto Card
+                        Rectangle {
+                            width: 260; height: 150
+                            color: window.bgCard
+                            border.color: openProjectMouse.containsMouse ? window.lavaPurple : window.borderSubtle
+                            border.width: 1; radius: 12
+                            
+                            // Glow effect
+                            Rectangle {
+                                anchors.fill: parent; radius: 12; z: -1
+                                color: "transparent"; border.color: window.lavaPurple; border.width: 2
+                                opacity: openProjectMouse.containsMouse ? 0.3 : 0
                             }
-                            Text {
-                                text: "NUEVO PROYECTO"
-                                font.pixelSize: 15
-                                font.bold: true
-                                color: window.textPrimary
-                                anchors.horizontalCenter: parent.horizontalCenter
-                            }
-                            Text {
-                                text: "Comienza una nueva creación"
-                                font.pixelSize: 11
-                                color: window.textMuted
-                                anchors.horizontalCenter: parent.horizontalCenter
-                            }
-                        }
 
-                        MouseArea {
-                            id: newProjectMouse
-                            anchors.fill: parent; hoverEnabled: true
-                            onClicked: createProjectDialog.open()
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: 10
+                                Text {
+                                    text: "📂"
+                                    font.pixelSize: 32
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                                Text {
+                                    text: "ABRIR PROYECTO"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: window.textPrimary
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                                Text {
+                                    text: "Carga un proyecto existente (.lavalyrics)"
+                                    font.pixelSize: 10
+                                    color: window.textMuted
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                            }
+
+                            MouseArea {
+                                id: openProjectMouse
+                                anchors.fill: parent; hoverEnabled: true
+                                onClicked: loadProjectDialog.open()
+                            }
                         }
                     }
 
