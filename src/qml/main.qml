@@ -82,24 +82,6 @@ ApplicationWindow {
         }
     }
 
-    Connections {
-        target: projectMgr
-        function onProjectLoaded(data) {
-            statusBar.showMsg("📂 Proyecto cargado con éxito")
-            currentScreen = 2 // Go to Editor screen
-            if (data.audioPath && data.audioPath !== "") {
-                mediaEngine.loadMedia(data.audioPath)
-            }
-            if (data.lyricsPath && data.lyricsPath !== "") {
-                if (data.lyricsPath.endsWith(".lrc")) lyricsLoader.loadLrc(data.lyricsPath)
-                else lyricsLoader.loadJson(data.lyricsPath)
-            }
-        }
-        function onErrorOccurred(message) {
-            statusBar.showMsg("❌ Error de proyecto: " + message)
-        }
-    }
-
     // ── File dialogs ───────────────────────────────────────────────────────
     FileDialog {
         id: openMediaDialog
@@ -122,19 +104,10 @@ ApplicationWindow {
     }
 
     FileDialog {
-        id: loadProjectDialog
-        title: "Abrir Proyecto LavaLyrics"
-        nameFilters: ["LavaLyrics Project (*.lavalyrics)"]
-        onAccepted: {
-            projectMgr.loadProject(selectedFile.toString().replace("file:///", ""))
-        }
-    }
-
-    FileDialog {
         id: saveProjectDialog
         title: "Guardar proyecto"
         fileMode: FileDialog.SaveFile
-        nameFilters: ["LavaLyrics Project (*.lavalyrics)"]
+        nameFilters: ["LavaLyrics Project (*.llproj)"]
         onAccepted: {
             projectMgr.saveProject(selectedFile.toString().replace("file:///", ""))
         }
@@ -315,17 +288,10 @@ ApplicationWindow {
                     Layout.fillWidth: true; implicitHeight: 40
                     enabled: nameField.text.trim() !== ""
                     onClicked: {
-                        let rawName = nameField.text.trim()
-                        // Strip any manually entered extension to avoid .lavalyrics.lavalyrics
-                        let cleanName = rawName.replace(/\.lavalyrics$/, "").replace(/\.llproj$/, "")
-                        let workspace = workspaceDirField.text.trim()
-                        let fileSavePath = workspace + "/" + cleanName + ".lavalyrics"
-                        
-                        projectMgr.newProject(cleanName)
-                        projectMgr.saveProject(fileSavePath)
-                        
+                        projectMgr.newProject(nameField.text.trim())
+                        outDirField.text = workspaceDirField.text.trim()
                         createProjectDialog.close()
-                        currentScreen = 2 // Go directly to Editor screen
+                        currentScreen = 2 // Go directly to Editor screen (skipping download screen)
                     }
                     contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     background: Rectangle {
@@ -469,92 +435,75 @@ ApplicationWindow {
                         }
                     }
 
-                    // Main Action Cards Row
-                    RowLayout {
-                        spacing: 24
+                    // Main Action Area (Nuevo Proyecto Card)
+                    Rectangle {
+                        width: 280; height: 160
+                        color: window.bgCard
+                        border.color: newProjectMouse.containsMouse ? window.lavaRed : window.borderSubtle
+                        border.width: 1; radius: 12
                         Layout.alignment: Qt.AlignHCenter
-
-                        // Nuevo Proyecto Card
+                        
+                        // Glow effect
                         Rectangle {
-                            width: 250; height: 140
-                            color: window.bgCard
-                            border.color: newProjectMouse.containsMouse ? window.lavaRed : window.borderSubtle
-                            border.width: 1; radius: 12
-                            
-                            Rectangle {
-                                anchors.fill: parent; radius: 12; z: -1
-                                color: "transparent"; border.color: window.lavaRed; border.width: 2
-                                opacity: newProjectMouse.containsMouse ? 0.3 : 0
-                            }
+                            anchors.fill: parent; radius: 12; z: -1
+                            color: "transparent"; border.color: window.lavaRed; border.width: 2
+                            opacity: newProjectMouse.containsMouse ? 0.3 : 0
+                        }
 
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 8
-                                Text { text: "➕"; font.pixelSize: 28; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: "NUEVO PROYECTO"; font.pixelSize: 13; font.bold: true; color: window.textPrimary; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: "Comienza una nueva creación"; font.pixelSize: 10; color: window.textMuted; anchors.horizontalCenter: parent.horizontalCenter }
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 12
+                            Text {
+                                text: "➕"
+                                font.pixelSize: 36
+                                anchors.horizontalCenter: parent.horizontalCenter
                             }
-
-                            MouseArea {
-                                id: newProjectMouse
-                                anchors.fill: parent; hoverEnabled: true
-                                onClicked: createProjectDialog.open()
+                            Text {
+                                text: "NUEVO PROYECTO"
+                                font.pixelSize: 15
+                                font.bold: true
+                                color: window.textPrimary
+                                anchors.horizontalCenter: parent.horizontalCenter
+                            }
+                            Text {
+                                text: "Comienza una nueva creación"
+                                font.pixelSize: 11
+                                color: window.textMuted
+                                anchors.horizontalCenter: parent.horizontalCenter
                             }
                         }
 
-                        // Abrir Proyecto Card
-                        Rectangle {
-                            width: 250; height: 140
-                            color: window.bgCard
-                            border.color: openProjectMouse.containsMouse ? window.lavaPurple : window.borderSubtle
-                            border.width: 1; radius: 12
-                            
-                            Rectangle {
-                                anchors.fill: parent; radius: 12; z: -1
-                                color: "transparent"; border.color: window.lavaPurple; border.width: 2
-                                opacity: openProjectMouse.containsMouse ? 0.3 : 0
-                            }
-
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 8
-                                Text { text: "📂"; font.pixelSize: 28; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: "ABRIR PROYECTO"; font.pixelSize: 13; font.bold: true; color: window.textPrimary; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: "Carga un archivo .lavalyrics"; font.pixelSize: 10; color: window.textMuted; anchors.horizontalCenter: parent.horizontalCenter }
-                            }
-
-                            MouseArea {
-                                id: openProjectMouse
-                                anchors.fill: parent; hoverEnabled: true
-                                onClicked: loadProjectDialog.open()
-                            }
+                        MouseArea {
+                            id: newProjectMouse
+                            anchors.fill: parent; hoverEnabled: true
+                            onClicked: createProjectDialog.open()
                         }
                     }
 
                     // Table with recent projects
                     ColumnLayout {
-                        spacing: 8
+                        spacing: 10
                         Layout.alignment: Qt.AlignHCenter
                         Layout.preferredWidth: 600
                         visible: projectMgr.recentProjects().length > 0
 
                         Text {
                             text: "Proyectos recientes"
-                            color: window.textSecondary; font.pixelSize: 13; font.bold: true
+                            color: window.textSecondary; font.pixelSize: 14; font.bold: true
                             Layout.alignment: Qt.AlignLeft
                         }
 
                         // Recent projects table header
                         Rectangle {
-                            Layout.fillWidth: true; height: 28
+                            Layout.fillWidth: true; height: 30
                             color: window.bgDark
                             border.color: window.borderSubtle; border.width: 1
                             radius: 6
 
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
-                                Text { text: "Nombre de Proyecto"; color: window.textMuted; font.pixelSize: 10; Layout.fillWidth: true }
-                                Text { text: "Ubicación"; color: window.textMuted; font.pixelSize: 10; Layout.preferredWidth: 280 }
+                                Text { text: "Nombre de Proyecto"; color: window.textMuted; font.pixelSize: 11; Layout.fillWidth: true }
+                                Text { text: "Ubicación"; color: window.textMuted; font.pixelSize: 11; Layout.preferredWidth: 250 }
                             }
                         }
 
@@ -562,7 +511,7 @@ ApplicationWindow {
                         Repeater {
                             model: projectMgr.recentProjects().slice(0, 5)
                             Rectangle {
-                                Layout.fillWidth: true; height: 36
+                                Layout.fillWidth: true; height: 38
                                 color: rowMouse.containsMouse ? window.bgElevated : "transparent"
                                 border.color: window.borderSubtle; border.width: 1
                                 radius: 6
@@ -570,14 +519,14 @@ ApplicationWindow {
                                 RowLayout {
                                     anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
                                     Text {
-                                        text: "📁  " + modelData.split("/").pop().split("\\").pop().replace(".lavalyrics", "").replace(".llproj", "")
-                                        color: window.textPrimary; font.pixelSize: 11; font.bold: true
+                                        text: "📁  " + modelData.split("\\").pop().replace(".llproj", "")
+                                        color: window.textPrimary; font.pixelSize: 12; font.bold: true
                                         Layout.fillWidth: true
                                     }
                                     Text {
                                         text: modelData
-                                        color: window.textMuted; font.pixelSize: 10; elide: Text.ElideLeft
-                                        Layout.preferredWidth: 280
+                                        color: window.textMuted; font.pixelSize: 11; elide: Text.ElideLeft
+                                        Layout.preferredWidth: 250
                                     }
                                 }
 
@@ -599,18 +548,18 @@ ApplicationWindow {
 
                 SplitView {
                     anchors.fill: parent
-                    orientation: Qt.Vertical
+                    orientation: Qt.Horizontal
 
-                    // ── SECCIÓN SUPERIOR (Inspector vs Previsualización) ──
+                    // ── Left sidebar (Dividido Verticalmente: Inspector arriba, Pestañas abajo) ──
                     SplitView {
-                        SplitView.preferredHeight: parent.height * 0.58
-                        SplitView.minimumHeight: 220
-                        orientation: Qt.Horizontal
+                        SplitView.preferredWidth: 300
+                        SplitView.minimumWidth: 200
+                        orientation: Qt.Vertical
 
                         // [Cuadrante Izquierda Arriba] Inspector
                         Rectangle {
-                            SplitView.preferredWidth: 300
-                            SplitView.minimumWidth: 180
+                            SplitView.preferredHeight: parent.height * 0.45
+                            SplitView.minimumHeight: 180
                             color: window.bgDark
                             border.color: window.borderSubtle; border.width: 1
 
@@ -627,27 +576,308 @@ ApplicationWindow {
                             }
                         }
 
-                        // [Cuadrante Derecha Arriba] Previsualización (Preview)
+                        // [Cuadrante Izquierda Abajo] Pestañas Multimedia / Efectos
                         Rectangle {
-                            SplitView.fillWidth: true
-                            color: window.bgDeep
+                            id: leftBottomTabs
+                            SplitView.preferredHeight: parent.height * 0.55
+                            SplitView.minimumHeight: 200
+                            color: window.bgDark
                             border.color: window.borderSubtle; border.width: 1
+
+                            property int activeTab: 0 // 0 = Elementos, 1 = Efectos
 
                             ColumnLayout {
                                 anchors.fill: parent; spacing: 0
 
-                                // Video viewport area
+                                // Tab Header Buttons
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 0
+                                    
+                                    Button {
+                                        text: "📂 MULTIMEDIA"
+                                        Layout.fillWidth: true; implicitHeight: 32
+                                        onClicked: leftBottomTabs.activeTab = 0
+                                        contentItem: Text { text: parent.text; color: leftBottomTabs.activeTab === 0 ? window.lavaRed : window.textSecondary; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                        background: Rectangle { color: leftBottomTabs.activeTab === 0 ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1 }
+                                    }
+                                    Button {
+                                        text: "⚡ EFECTOS"
+                                        Layout.fillWidth: true; implicitHeight: 32
+                                        onClicked: leftBottomTabs.activeTab = 1
+                                        contentItem: Text { text: parent.text; color: leftBottomTabs.activeTab === 1 ? window.lavaRed : window.textSecondary; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                        background: Rectangle { color: leftBottomTabs.activeTab === 1 ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1 }
+                                    }
+                                }
+
+                                // Tab content container
+                                StackLayout {
+                                    Layout.fillWidth: true; Layout.fillHeight: true
+                                    currentIndex: leftBottomTabs.activeTab
+
+                                    // Tab 0: Multimedia Library
+                                    ColumnLayout {
+                                        anchors.fill: parent; anchors.margins: 8; spacing: 8
+                                        
+                                        // Quick loader cards
+                                        RowLayout {
+                                            Layout.fillWidth: true; spacing: 8
+                                            Button {
+                                                text: "🎵 Audio"
+                                                Layout.fillWidth: true; implicitHeight: 28
+                                                onClicked: openMediaDialog.open()
+                                                contentItem: Text { text: parent.text; color: window.textPrimary; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 6 }
+                                            }
+                                            Button {
+                                                text: "📝 Letras"
+                                                Layout.fillWidth: true; implicitHeight: 28
+                                                onClicked: openLyricsDialog.open()
+                                                contentItem: Text { text: parent.text; color: window.textPrimary; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 6 }
+                                            }
+                                        }
+
+                                        ListView {
+                                            id: tabLyricsListView
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            clip: true
+                                            model: lyricsLoader.getAllLines()
+                                            currentIndex: lyricsLoader.currentIndex
+
+                                            delegate: Rectangle {
+                                                width: ListView.view ? ListView.view.width : 200; height: 26
+                                                color: lyricsLoader.currentIndex === index ? window.bgElevated : "transparent"
+                                                border.color: lyricsLoader.currentIndex === index ? window.lavaRed : "transparent"
+                                                border.width: 1; radius: 4
+
+                                                Row {
+                                                    anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 8; spacing: 8
+                                                    Text {
+                                                        text: {
+                                                            let ms = modelData.timeMs; let s = Math.floor(ms/1000); let m = Math.floor(s/60)
+                                                            return String(m).padStart(2,'0') + ":" + String(s%60).padStart(2,'0')
+                                                        }
+                                                        color: window.textMuted; font.pixelSize: 9; font.family: "Consolas"
+                                                    }
+                                                    Text { text: modelData.text; color: lyricsLoader.currentIndex === index ? window.textPrimary : window.textSecondary; font.pixelSize: 10; elide: Text.ElideRight; width: 150 }
+                                                }
+                                            }
+                                            onCurrentIndexChanged: {
+                                                if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Center)
+                                            }
+                                        }
+                                    }
+
+                                    // Tab 1: Effects List
+                                    ColumnLayout {
+                                        anchors.fill: parent; anchors.margins: 12; spacing: 8
+                                        Text { text: "Efectos Visuales"; font.bold: true; color: window.textPrimary; font.pixelSize: 12 }
+                                        Text { text: "• Efecto Zoom Dinámico (Activo)"; color: window.textSecondary; font.pixelSize: 11 }
+                                        Text { text: "• Bordes de Safe Zone (Red)"; color: window.textSecondary; font.pixelSize: 11 }
+                                        Text { text: "• Animación de Letras (Rebote)"; color: window.textSecondary; font.pixelSize: 11 }
+                                        Item { Layout.fillHeight: true }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Center: Viewport + Controls ────────────────────────
+                    ColumnLayout {
+                        SplitView.fillWidth: true
+                        spacing: 0
+
+                        // Video viewport area
+                        Rectangle {
+                            Layout.fillWidth: true; Layout.fillHeight: true
+                            color: window.bgDeep
+
+                            // 9:16 phone container
+                            Item {
+                                id: phoneContainer
+                                anchors.centerIn: parent
+                                height: Math.min(parent.height - 16, 600)
+                                width: height * 9 / 16
+
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.fillHeight: true; color: "transparent"
+                                    anchors.fill: parent; radius: 16; clip: true
+                                    color: "#000"
+                                    border.color: window.borderSubtle; border.width: 1
 
-                                    // 9:16 phone container
-                                    Item {
-                                        id: phoneContainer
+                                    // Video frame placeholder / real frame via Image
+                                    Rectangle {
+                                        anchors.fill: parent; color: "#080808"
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: mediaEngine.mediaPath === "" ? "🎬\nArrasta un video\nal timeline" : "▶ Preview"
+                                            color: window.textMuted; font.pixelSize: 14
+                                            horizontalAlignment: Text.AlignHCenter
+                                            wrapMode: Text.WordWrap
+                                        }
+                                    }
+
+                                    // Safe zone overlay
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        anchors.topMargin: parent.height * 0.10
+                                        anchors.bottomMargin: parent.height * 0.15
+                                        anchors.leftMargin: parent.width * 0.06
+                                        anchors.rightMargin: parent.width * 0.06
+                                        color: "transparent"
+                                        border.color: "#ff3e3e33"; border.width: 1
+                                    }
+
+                                    // Lyrics overlay
+                                    Column {
                                         anchors.centerIn: parent
-                                        height: Math.min(parent.height - 16, 500)
-                                        width: height * 9 / 16
+                                        width: parent.width * 0.86
+                                        spacing: 10
 
+                                        Text {
+                                            text: lyricsLoader.prevLine
+                                            width: parent.width; horizontalAlignment: Text.AlignHCenter
+                                            font.pixelSize: phoneContainer.height * 0.026
+                                            font.bold: true; color: "#888"; wrapMode: Text.WordWrap
+                                            opacity: 0.7
+                                            style: Text.Outline; styleColor: "#000"
+                                        }
+                                        Text {
+                                            text: lyricsLoader.currentLine !== "" ? lyricsLoader.currentLine : "♪"
+                                            width: parent.width; horizontalAlignment: Text.AlignHCenter
+                                            font.pixelSize: phoneContainer.height * 0.045
+                                            font.bold: true; color: "#ffffff"; wrapMode: Text.WordWrap
+                                            style: Text.Outline; styleColor: "#000000"
+
+                                            Behavior on text {
+                                                SequentialAnimation {
+                                                    NumberAnimation { target: lyricsLine; property: "scale"; to: 0.9; duration: 80 }
+                                                    NumberAnimation { target: lyricsLine; property: "scale"; to: 1.0; duration: 120; easing.type: Easing.OutBack }
+                                                }
+                                            }
+                                            id: lyricsLine
+                                        }
+                                        Text {
+                                            text: lyricsLoader.nextLine
+                                            width: parent.width; horizontalAlignment: Text.AlignHCenter
+                                            font.pixelSize: phoneContainer.height * 0.026
+                                            font.bold: true; color: "#888"; wrapMode: Text.WordWrap
+                                            opacity: 0.7
+                                            style: Text.Outline; styleColor: "#000"
+                                        }
+                                    }
+
+                                    // Time overlay (top-left)
+                                    Text {
+                                        anchors.top: parent.top; anchors.left: parent.left
+                                        anchors.margins: 8
+                                        text: mediaEngine.formatTime(mediaEngine.position) + " / " + mediaEngine.formatTime(mediaEngine.duration)
+                                        color: "#ffffff80"; font.pixelSize: 10; font.family: "Consolas"
+                                    }
+                                }
+                            }
+                        }
+
+                        // Transport controls
+                        Rectangle {
+                            Layout.fillWidth: true; height: 60
+                            color: window.bgDark
+                            border.color: window.borderSubtle; border.width: 1
+
+                            ColumnLayout {
+                                anchors.fill: parent; anchors.margins: 8; spacing: 4
+
+                                // Seek bar
+                                Slider {
+                                    id: seekBar
+                                    Layout.fillWidth: true; height: 16
+                                    from: 0; to: Math.max(1, mediaEngine.duration)
+                                    value: mediaEngine.position
+                                    enabled: mediaEngine.duration > 0
+
+                                    onMoved: mediaEngine.seek(value)
+
+                                    background: Rectangle {
+                                        x: seekBar.leftPadding; y: seekBar.topPadding + seekBar.availableHeight / 2 - height / 2
+                                        width: seekBar.availableWidth; height: 4; radius: 2
+                                        color: window.bgElevated
                                         Rectangle {
+                                            width: seekBar.visualPosition * parent.width; height: parent.height; radius: 2
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0; color: window.lavaRed }
+                                                GradientStop { position: 1; color: window.lavaOrange }
+                                            }
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: seekBar.leftPadding + seekBar.visualPosition * seekBar.availableWidth - width / 2
+                                        y: seekBar.topPadding + seekBar.availableHeight / 2 - height / 2
+                                        width: 14; height: 14; radius: 7
+                                        color: window.lavaRed
+                                        border.color: "#fff"; border.width: 1
+                                    }
+                                }
+
+                                // Playback buttons
+                                RowLayout {
+                                    Layout.alignment: Qt.AlignHCenter; spacing: 8
+                                    Repeater {
+                                        model: [
+                                            {text: "⏮", tip: "Inicio"},
+                                            {text: "⏪", tip: "-10s"},
+                                            {text: mediaEngine.isPlaying ? "⏸" : "▶", tip: "Play/Pausa", big: true},
+                                            {text: "⏩", tip: "+10s"},
+                                            {text: "⏭", tip: "Fin"},
+                                        ]
+                                        Button {
+                                            text: modelData.text
+                                            implicitWidth: modelData.big ? 48 : 36; implicitHeight: 32
+                                            ToolTip.visible: hovered; ToolTip.text: modelData.tip
+                                            onClicked: {
+                                                if      (index === 0) mediaEngine.seek(0)
+                                                else if (index === 1) mediaEngine.seek(Math.max(0, mediaEngine.position - 10))
+                                                else if (index === 2) mediaEngine.isPlaying ? mediaEngine.pause() : mediaEngine.play()
+                                                else if (index === 3) mediaEngine.seek(Math.min(mediaEngine.duration, mediaEngine.position + 10))
+                                                else if (index === 4) mediaEngine.seek(mediaEngine.duration)
+                                            }
+                                            contentItem: Text { text: parent.text; color: window.textPrimary; font.pixelSize: modelData.big ? 18 : 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; radius: 6 }
+                                        }
+                                    }
+
+                                    // Volume slider
+                                    Text { text: "🔊"; color: window.textMuted; font.pixelSize: 12 }
+                                    Slider {
+                                        id: volSlider; from: 0; to: 1; value: mediaEngine.volume
+                                        implicitWidth: 80; implicitHeight: 20
+                                        onMoved: mediaEngine.volume = value
+                                        background: Rectangle {
+                                            x: volSlider.leftPadding; y: volSlider.topPadding + volSlider.availableHeight/2 - height/2
+                                            width: volSlider.availableWidth; height: 3; radius: 2; color: window.bgElevated
+                                            Rectangle { width: volSlider.visualPosition * parent.width; height: parent.height; radius: 2; color: window.textSecondary }
+                                        }
+                                        handle: Rectangle {
+                                            x: volSlider.leftPadding + volSlider.visualPosition * volSlider.availableWidth - width/2
+                                            y: volSlider.topPadding + volSlider.availableHeight/2 - height/2
+                                            width: 10; height: 10; radius: 5; color: window.textSecondary
+                                        }
+                                    }
+
+                                    // Zoom
+                                    Text { text: "🔍"; color: window.textMuted; font.pixelSize: 12; Layout.leftMargin: 8 }
+                                    Slider {
+                                        from: 20; to: 300; value: timelineScale
+                                        implicitWidth: 80; implicitHeight: 20
+                                        onMoved: timelineScale = value
+                                        background: Rectangle {
+                                            x: parent.leftPadding; y: parent.topPadding + parent.availableHeight/2 - height/2
+                                            width: parent.availableWidth; height: 3; radius: 2; color: window.bgElevated
+                                            Rectangle { width: parent.parent.visualPosition * parent.width; height: parent.height; radius: 2; color: window.textMuted }
+                                        }
+                                        handle: Rectangle {
+                                            x: parent.leftPadding + parent.visualPosition * parent.availableWidth - width/2
+                                            y: parent.topPadding + parent.availableHeight/2 - height/2
                                             width: 10; height: 10; radius: 5; color: window.textMuted
                                         }
                                     }
