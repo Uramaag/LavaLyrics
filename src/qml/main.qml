@@ -221,6 +221,323 @@ ApplicationWindow {
         }
     }
 
+    // ── Platform Audio & Lyrics Search Dialog Modal ─────────────────────────
+    Window {
+        id: platformSearchDialog
+        visible: false
+        width: 800; height: 580
+        title: "Buscar Música en Plataformas"
+        flags: Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint
+        color: window.bgDark
+        modality: Qt.ApplicationModal
+
+        property string searchQuery: ""
+        property bool filterOnlySynced: false
+        property var rawResults: [
+            // Sample tracks
+            { type: "song", title: "Blinding Lights", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/0VjIjja4nUo2Y2tJ68wZ2V" },
+            { type: "song", title: "Starboy", artist: "The Weeknd", album: "Starboy", platform: "YouTube Music", hasLyrics: true, isDownloaded: false, url: "https://music.youtube.com/watch?v=dMMUB-goaLQ" },
+            { type: "song", title: "Shape of You", artist: "Ed Sheeran", album: "÷ (Divide)", platform: "SoundCloud", hasLyrics: false, isDownloaded: false, url: "https://soundcloud.com/edsheeran/shape-of-you" },
+            { type: "song", title: "As It Was", artist: "Harry Styles", album: "Harry's House", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/4D7tIBBiBqi8tGGLJ6jYaa" },
+            // Sample albums (expanded lists)
+            { type: "album", title: "After Hours", artist: "The Weeknd", platform: "Spotify", isExpanded: false, tracks: [
+                { type: "song", title: "Alone Again", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/4454nVR6t5P14647385" },
+                { type: "song", title: "Too Late", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/4454nVR6t5P14647386" },
+                { type: "song", title: "Blinding Lights", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/0VjIjja4nUo2Y2tJ68wZ2V" }
+            ]},
+            // Sample artists (expanded lists)
+            { type: "artist", title: "The Weeknd", platform: "Spotify", isExpanded: false, tracks: [
+                { type: "song", title: "Save Your Tears", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/5QO791xpwIMUpIHlhN1hlV" },
+                { type: "song", title: "Die For You", artist: "The Weeknd", album: "Starboy", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/2H7Up7jU4zk6w0tyzXv35B" }
+            ]}
+        ]
+
+        property var filteredResults: []
+
+        function search() {
+            let query = searchField.text.trim().toLowerCase()
+            let res = []
+            for (let i = 0; i < rawResults.length; i++) {
+                let item = rawResults[i]
+                if (query === "" || item.title.toLowerCase().indexOf(query) !== -1 || (item.artist && item.artist.toLowerCase().indexOf(query) !== -1)) {
+                    if (item.type === "song") {
+                        if (filterOnlySynced && !item.hasLyrics) continue
+                        res.push(item)
+                    } else {
+                        // For albums and artists, filter their child tracks
+                        let childTracks = []
+                        for (let j = 0; j < item.tracks.length; j++) {
+                            let track = item.tracks[j]
+                            if (filterOnlySynced && !track.hasLyrics) continue
+                            childTracks.push(track)
+                        }
+                        if (childTracks.length > 0) {
+                            // Create copy with filtered tracks
+                            res.push({
+                                type: item.type,
+                                title: item.title,
+                                artist: item.artist,
+                                platform: item.platform,
+                                isExpanded: item.isExpanded,
+                                tracks: childTracks
+                            })
+                        }
+                    }
+                }
+            }
+            filteredResults = res
+        }
+
+        Component.onCompleted: search()
+
+        ColumnLayout {
+            anchors.fill: parent; anchors.margins: 20; spacing: 14
+
+            Text {
+                text: "🔍 Buscador de Música Multiplataforma"
+                font.pixelSize: 18; font.bold: true; color: window.textPrimary
+            }
+
+            Text {
+                text: "Busca canciones en Spotify, SoundCloud, YouTube Music o Musixmatch e impórtalas con un click."
+                font.pixelSize: 11; color: window.textSecondary
+            }
+
+            // Search input field + options
+            RowLayout {
+                Layout.fillWidth: true; spacing: 10
+
+                Rectangle {
+                    Layout.fillWidth: true; height: 38
+                    color: window.bgCard; border.color: searchField.activeFocus ? window.lavaRed : window.borderSubtle
+                    border.width: 1; radius: 6
+
+                    RowLayout {
+                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                        TextField {
+                            id: searchField
+                            Layout.fillWidth: true; background: Item {}
+                            placeholderText: "Nombre de canción, artista o álbum..."
+                            color: window.textPrimary; placeholderTextColor: window.textMuted
+                            font.pixelSize: 12
+                            onAccepted: platformSearchDialog.search()
+                        }
+                        Button {
+                            text: "✕"
+                            implicitWidth: 24; implicitHeight: 24
+                            onClicked: { searchField.text = ""; platformSearchDialog.search() }
+                            contentItem: Text { text: parent.text; color: window.textMuted; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Item {}
+                        }
+                    }
+                }
+
+                Button {
+                    text: "Buscar 🚀"
+                    implicitWidth: 100; implicitHeight: 38
+                    onClicked: platformSearchDialog.search()
+                    contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 6 }
+                }
+            }
+
+            // Filter checkbox row
+            RowLayout {
+                Layout.fillWidth: true; spacing: 12
+                CheckBox {
+                    id: syncedLyricsFilter
+                    text: "Solo letras sincronizadas"
+                    checked: platformSearchDialog.filterOnlySynced
+                    onCheckedChanged: {
+                        platformSearchDialog.filterOnlySynced = checked
+                        platformSearchDialog.search()
+                    }
+                    contentItem: Text { text: syncedLyricsFilter.text; color: window.textSecondary; font.pixelSize: 11; anchors.left: syncedLyricsFilter.indicator.right; anchors.leftMargin: 6; anchors.verticalCenter: syncedLyricsFilter.indicator.verticalCenter }
+                }
+            }
+
+            // Results view header
+            Rectangle {
+                Layout.fillWidth: true; height: 26; color: window.bgDark; border.color: window.borderSubtle; border.width: 1; radius: 4
+                RowLayout {
+                    anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+                    Text { text: "Nombre / Título"; color: window.textMuted; font.pixelSize: 10; Layout.fillWidth: true }
+                    Text { text: "Plataforma"; color: window.textMuted; font.pixelSize: 10; Layout.preferredWidth: 110 }
+                    Text { text: "Letras"; color: window.textMuted; font.pixelSize: 10; Layout.preferredWidth: 80; horizontalAlignment: Text.AlignHCenter }
+                    Text { text: "Estado"; color: window.textMuted; font.pixelSize: 10; Layout.preferredWidth: 100; horizontalAlignment: Text.AlignHCenter }
+                    Text { text: "Acción"; color: window.textMuted; font.pixelSize: 10; Layout.preferredWidth: 90; horizontalAlignment: Text.AlignRight }
+                }
+            }
+
+            // Results List
+            ScrollView {
+                Layout.fillWidth: true; Layout.fillHeight: true; clip: true
+                ListView {
+                    id: searchListView
+                    anchors.fill: parent
+                    model: platformSearchDialog.filteredResults
+                    spacing: 4
+
+                    delegate: ColumnLayout {
+                        width: searchListView.width
+                        spacing: 2
+
+                        // Main row
+                        Rectangle {
+                            Layout.fillWidth: true; height: 42
+                            color: window.bgCard; radius: 6; border.color: window.borderSubtle; border.width: 1
+
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+
+                                // Expand button / Title
+                                RowLayout {
+                                    Layout.fillWidth: true; spacing: 8
+                                    Text {
+                                        text: modelData.type === "album" ? "💿" : (modelData.type === "artist" ? "👤" : "🎵")
+                                        font.pixelSize: 12
+                                    }
+                                    ColumnLayout {
+                                        spacing: 2
+                                        Text {
+                                            text: modelData.title
+                                            color: window.textPrimary; font.bold: true; font.pixelSize: 11
+                                        }
+                                        Text {
+                                            text: modelData.artist ? modelData.artist : (modelData.type === "album" ? "Álbum" : "Artista")
+                                            color: window.textMuted; font.pixelSize: 9
+                                            visible: modelData.artist || modelData.type !== "song"
+                                        }
+                                    }
+                                    
+                                    Button {
+                                        visible: modelData.type === "album" || modelData.type === "artist"
+                                        text: modelData.isExpanded ? "▲ Ocultar canciones" : "▼ Ver canciones"
+                                        implicitHeight: 20
+                                        contentItem: Text { text: parent.text; color: window.lavaPurple; font.pixelSize: 9; font.bold: true }
+                                        background: Item {}
+                                        onClicked: {
+                                            modelData.isExpanded = !modelData.isExpanded
+                                            // Force trigger model update
+                                            platformSearchDialog.search()
+                                        }
+                                    }
+                                }
+
+                                // Platform
+                                Text {
+                                    text: modelData.platform
+                                    color: window.textSecondary; font.pixelSize: 10
+                                    Layout.preferredWidth: 110
+                                }
+
+                                // Has lyrics
+                                Text {
+                                    text: modelData.type === "song" ? (modelData.hasLyrics ? "✅ Sincronizadas" : "❌ No") : "-"
+                                    color: modelData.hasLyrics ? "#4caf50" : window.textMuted; font.pixelSize: 10
+                                    Layout.preferredWidth: 80; horizontalAlignment: Text.AlignHCenter
+                                }
+
+                                // State
+                                Text {
+                                    text: modelData.type === "song" ? (modelData.isDownloaded ? "📥 Guardada" : "☁ En Nube") : "-"
+                                    color: modelData.isDownloaded ? "#81c784" : window.textMuted; font.pixelSize: 10
+                                    Layout.preferredWidth: 100; horizontalAlignment: Text.AlignHCenter
+                                }
+
+                                // Download Action Button
+                                Button {
+                                    visible: modelData.type === "song"
+                                    text: modelData.isDownloaded ? "Importar" : "Descargar"
+                                    Layout.preferredWidth: 90; implicitHeight: 26
+                                    onClicked: {
+                                        if (modelData.isDownloaded) {
+                                            // Simulate direct load since it is pre-downloaded
+                                            statusBar.showMsg("Importando: " + modelData.title)
+                                            downloader.downloadCompleted("C:/LavaLyricsProjects/samples/" + modelData.title + ".mp3", "")
+                                        } else {
+                                            downloader.downloadSpotify(modelData.url, outDirField.text)
+                                        }
+                                        platformSearchDialog.close()
+                                    }
+                                    contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 4 }
+                                }
+                            }
+                        }
+
+                        // Child tracks list for artist/album
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 24
+                            visible: (modelData.type === "album" || modelData.type === "artist") && modelData.isExpanded
+                            spacing: 2
+
+                            Repeater {
+                                model: modelData.tracks
+                                Rectangle {
+                                    Layout.fillWidth: true; height: 36
+                                    color: window.bgDark; radius: 4; border.color: window.borderSubtle; border.width: 1
+
+                                    RowLayout {
+                                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                                        Text {
+                                            text: "↳  " + modelData.title
+                                            color: window.textSecondary; font.pixelSize: 10; Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            text: modelData.hasLyrics ? "✅ Sincronizadas" : "❌ No"
+                                            color: modelData.hasLyrics ? "#4caf50" : window.textMuted; font.pixelSize: 9
+                                            Layout.preferredWidth: 80; horizontalAlignment: Text.AlignHCenter
+                                        }
+                                        Text {
+                                            text: modelData.isDownloaded ? "📥 Guardada" : "☁ En Nube"
+                                            color: modelData.isDownloaded ? "#81c784" : window.textMuted; font.pixelSize: 9
+                                            Layout.preferredWidth: 100; horizontalAlignment: Text.AlignHCenter
+                                        }
+                                        Button {
+                                            text: modelData.isDownloaded ? "Importar" : "Descargar"
+                                            Layout.preferredWidth: 80; implicitHeight: 22
+                                            onClicked: {
+                                                if (modelData.isDownloaded) {
+                                                    downloader.downloadCompleted("C:/LavaLyricsProjects/samples/" + modelData.title + ".mp3", "")
+                                                } else {
+                                                    downloader.downloadSpotify(modelData.url, outDirField.text)
+                                                }
+                                                platformSearchDialog.close()
+                                            }
+                                            contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 9; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 4 }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Close button
+            Button {
+                text: "Cerrar"
+                Layout.alignment: Qt.AlignRight; implicitWidth: 100; implicitHeight: 34
+                onClicked: platformSearchDialog.close()
+                contentItem: Text { text: parent.text; color: window.textSecondary; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1; radius: 6 }
+            }
+        }
+
+        function open() {
+            searchField.text = ""
+            search()
+            visible = true
+        }
+
+        function close() {
+            visible = false
+        }
+    }
+
     FolderDialog {
         id: selectWorkspaceDialog
         title: "Seleccionar Carpeta de Trabajo"
@@ -696,55 +1013,48 @@ ApplicationWindow {
                                     currentIndex: leftBottomTabs.activeTab
 
                                     // Tab 0: Multimedia Library
-                                    ColumnLayout {
-                                        anchors.fill: parent; anchors.margins: 8; spacing: 8
-                                        
-                                        // Quick loader cards
-                                        RowLayout {
-                                            Layout.fillWidth: true; spacing: 8
-                                            Button {
-                                                text: "🎵 Audio"
-                                                Layout.fillWidth: true; implicitHeight: 28
-                                                onClicked: openMediaDialog.open()
-                                                contentItem: Text { text: parent.text; color: window.textPrimary; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                                background: Rectangle { color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 6 }
-                                            }
-                                            Button {
-                                                text: "📝 Letras"
-                                                Layout.fillWidth: true; implicitHeight: 28
-                                                onClicked: openLyricsDialog.open()
-                                                contentItem: Text { text: parent.text; color: window.textPrimary; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                                background: Rectangle { color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 6 }
-                                            }
-                                        }
+                                    Item {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
 
-                                        ListView {
-                                            id: tabLyricsListView
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            clip: true
-                                            model: lyricsLoader.getAllLines()
-                                            currentIndex: lyricsLoader.currentIndex
+                                        Rectangle {
+                                            anchors.fill: parent; anchors.margins: 8
+                                            color: window.bgCard; border.color: placeholderMouse.containsMouse ? window.lavaRed : window.borderSubtle
+                                            border.width: 1; radius: 8
 
-                                            delegate: Rectangle {
-                                                width: ListView.view ? ListView.view.width : 200; height: 26
-                                                color: lyricsLoader.currentIndex === index ? window.bgElevated : "transparent"
-                                                border.color: lyricsLoader.currentIndex === index ? window.lavaRed : "transparent"
-                                                border.width: 1; radius: 4
+                                            ColumnLayout {
+                                                anchors.centerIn: parent; spacing: 10
+                                                width: parent.width * 0.9
 
-                                                Row {
-                                                    anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 8; spacing: 8
-                                                    Text {
-                                                        text: {
-                                                            let ms = modelData.timeMs; let s = Math.floor(ms/1000); let m = Math.floor(s/60)
-                                                            return String(m).padStart(2,'0') + ":" + String(s%60).padStart(2,'0')
-                                                        }
-                                                        color: window.textMuted; font.pixelSize: 9; font.family: "Consolas"
-                                                    }
-                                                    Text { text: modelData.text; color: lyricsLoader.currentIndex === index ? window.textPrimary : window.textSecondary; font.pixelSize: 10; elide: Text.ElideRight; width: 150 }
+                                                Text {
+                                                    text: "📁"
+                                                    font.pixelSize: 32; Layout.alignment: Qt.AlignHCenter
+                                                }
+                                                Text {
+                                                    text: "Doble click para importar medios\n(abre explorador de Windows)"
+                                                    color: window.textPrimary; font.pixelSize: 11; font.bold: true
+                                                    horizontalAlignment: Text.AlignHCenter; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                                }
+                                                Text {
+                                                    text: "Click derecho para importar audio\n(Buscar en Spotify, Soundcloud, etc.)"
+                                                    color: window.textMuted; font.pixelSize: 10
+                                                    horizontalAlignment: Text.AlignHCenter; Layout.fillWidth: true; wrapMode: Text.WordWrap
                                                 }
                                             }
-                                            onCurrentIndexChanged: {
-                                                if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Center)
+
+                                            MouseArea {
+                                                id: placeholderMouse
+                                                anchors.fill: parent; hoverEnabled: true
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                onDoubleClicked: {
+                                                    if (mouse.button === Qt.LeftButton) {
+                                                        openMediaDialog.open()
+                                                    }
+                                                }
+                                                onClicked: {
+                                                    if (mouse.button === Qt.RightButton) {
+                                                        platformSearchDialog.open()
+                                                    }
+                                                }
                                             }
                                         }
                                     }
