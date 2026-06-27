@@ -190,6 +190,15 @@ ApplicationWindow {
         }
     }
 
+    FolderDialog {
+        id: selectWorkspaceDialog
+        title: "Seleccionar Carpeta de Trabajo"
+        currentFolder: "file:///C:/Users/" + Qt.platform.os + "/Documents/LavaLyricsProjects/ACALOSPROJECTOS"
+        onAccepted: {
+            workspaceDirField.text = selectedFolder.toString().replace("file:///", "")
+        }
+    }
+
     // ── Create New Project Dialog Modal ──────────────────────────────────────
     Window {
         id: createProjectDialog
@@ -244,9 +253,17 @@ ApplicationWindow {
                         TextField {
                             id: workspaceDirField
                             Layout.fillWidth: true
-                            text: "C:/Users/" + Qt.platform.os + "/Music/LavaLyrics"
+                            text: "C:/Users/" + Qt.platform.os + "/Documents/LavaLyricsProjects/ACALOSPROJECTOS"
                             color: window.textSecondary; background: Item {}
-                            font.pixelSize: 12; placeholderTextColor: window.textMuted
+                            font.pixelSize: 11; placeholderTextColor: window.textMuted
+                        }
+                        Button {
+                            text: "Examinar..."
+                            implicitWidth: 90
+                            Layout.fillHeight: true
+                            onClicked: selectWorkspaceDialog.open()
+                            contentItem: Text { text: parent.text; color: window.textPrimary; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { color: parent.hovered ? window.bgElevated : window.bgDark; border.color: window.borderSubtle; border.width: 1; radius: 4 }
                         }
                     }
                 }
@@ -274,7 +291,7 @@ ApplicationWindow {
                         projectMgr.newProject(nameField.text.trim())
                         outDirField.text = workspaceDirField.text.trim()
                         createProjectDialog.close()
-                        currentScreen = 1 // Go to Download screen
+                        currentScreen = 2 // Go directly to Editor screen (skipping download screen)
                     }
                     contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     background: Rectangle {
@@ -324,18 +341,21 @@ ApplicationWindow {
                     spacing: 2
                     Layout.leftMargin: 12
                     Repeater {
-                        model: ["🏠 Inicio", "⬇️ Descargar", "🎬 Editor"]
+                        model: ["🏠 Inicio", "🎬 Editor"]
                         Button {
                             text: modelData
-                            onClicked: currentScreen = index
+                            onClicked: {
+                                // Maps 0 -> 0 (Inicio), 1 -> 2 (Editor)
+                                currentScreen = (index === 0) ? 0 : 2
+                            }
                             contentItem: Text {
-                                text: parent.text; color: currentScreen === index ? window.lavaRed : window.textSecondary
-                                font.pixelSize: 12; font.bold: currentScreen === index
+                                text: parent.text; color: currentScreen === (index === 0 ? 0 : 2) ? window.lavaRed : window.textSecondary
+                                font.pixelSize: 12; font.bold: currentScreen === (index === 0 ? 0 : 2)
                                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                             }
                             background: Rectangle {
-                                color: currentScreen === index ? window.bgElevated : "transparent"
-                                border.color: currentScreen === index ? window.lavaRed : "transparent"
+                                color: currentScreen === (index === 0 ? 0 : 2) ? window.bgElevated : "transparent"
+                                border.color: currentScreen === (index === 0 ? 0 : 2) ? window.lavaRed : "transparent"
                                 border.width: 1; radius: 6
                                 Behavior on color { ColorAnimation { duration: 150 } }
                             }
@@ -516,140 +536,6 @@ ApplicationWindow {
                                     onClicked: projectMgr.loadProject(modelData)
                                 }
                             }
-                        }
-                    }
-                }
-            }
-
-            // ── DOWNLOAD SCREEN ────────────────────────────────────────────
-            Item {
-                anchors.fill: parent
-                visible: currentScreen === 1
-
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    width: 560; spacing: 24
-
-                    Text { text: "⬇️ Descargar canción"; font.pixelSize: 28; font.bold: true; color: window.textPrimary; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: "Pega una URL de YouTube, YouTube Music o Spotify"; font.pixelSize: 14; color: window.textSecondary; Layout.alignment: Qt.AlignHCenter }
-
-                    // URL input
-                    Rectangle {
-                        Layout.fillWidth: true; height: 52
-                        color: window.bgCard; border.color: urlField.activeFocus ? window.lavaRed : window.borderSubtle
-                        border.width: urlField.activeFocus ? 2 : 1; radius: 10
-                        Behavior on border.color { ColorAnimation { duration: 150 } }
-
-                        RowLayout {
-                            anchors.fill: parent; anchors.margins: 12
-                            Text { text: "🔗"; font.pixelSize: 18 }
-                            TextField {
-                                id: urlField
-                                Layout.fillWidth: true
-                                placeholderText: "https://open.spotify.com/track/... o https://youtube.com/..."
-                                color: window.textPrimary
-                                background: Item {}
-                                font.pixelSize: 13
-                                placeholderTextColor: window.textMuted
-                                onAccepted: btnDownload.clicked()
-                            }
-                        }
-                    }
-
-                    // Output dir
-                    Rectangle {
-                        Layout.fillWidth: true; height: 44
-                        color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 10
-                        RowLayout {
-                            anchors.fill: parent; anchors.margins: 12
-                            Text { text: "📂"; font.pixelSize: 16 }
-                            TextField {
-                                id: outDirField
-                                Layout.fillWidth: true
-                                color: window.textSecondary
-                                background: Item {}
-                                font.pixelSize: 12
-                                placeholderTextColor: window.textMuted
-                                placeholderText: "Carpeta de destino"
-                            }
-                        }
-                    }
-
-                    // Download progress
-                    Rectangle {
-                        Layout.fillWidth: true; height: 8
-                        color: window.bgElevated; radius: 4
-                        visible: downloader.isDownloading || downloader.progress > 0
-                        Rectangle {
-                            width: parent.width * downloader.progress / 100; height: parent.height; radius: 4
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0; color: window.lavaRed }
-                                GradientStop { position: 1; color: window.lavaPurple }
-                            }
-                            Behavior on width { NumberAnimation { duration: 400 } }
-                        }
-                    }
-
-                    Text {
-                        text: downloader.statusMessage
-                        color: window.textSecondary; font.pixelSize: 12
-                        Layout.alignment: Qt.AlignHCenter
-                        visible: text !== ""
-                        wrapMode: Text.WordWrap; Layout.fillWidth: true
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-
-                    // Buttons
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter; spacing: 12
-
-                        Button {
-                            id: btnDownload
-                            text: downloader.isDownloading ? "Descargando..." : "⬇️  Descargar"
-                            enabled: !downloader.isDownloading && urlField.text.trim() !== ""
-                            implicitWidth: 180; implicitHeight: 44
-                            onClicked: {
-                                let url = urlField.text.trim()
-                                let dir = outDirField.text.trim()
-                                if (url.indexOf("spotify") >= 0) downloader.downloadSpotify(url, dir)
-                                else downloader.downloadFromUrl(url, dir)
-                            }
-                            contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            background: Rectangle {
-                                color: parent.enabled ? (parent.hovered ? "#ff5252" : window.lavaRed) : window.bgCard
-                                radius: 10
-                                Behavior on color { ColorAnimation { duration: 150 } }
-                            }
-                        }
-
-                        Button {
-                            text: "📂 Abrir audio local"
-                            implicitWidth: 160; implicitHeight: 44
-                            onClicked: openMediaDialog.open()
-                            contentItem: Text { text: parent.text; color: window.textSecondary; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            background: Rectangle { color: parent.hovered ? window.bgElevated : window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 10; Behavior on color { ColorAnimation { duration: 150 } } }
-                        }
-
-                        Button {
-                            text: "✋ Cancelar"
-                            visible: downloader.isDownloading
-                            implicitWidth: 100; implicitHeight: 44
-                            onClicked: downloader.cancel()
-                            contentItem: Text { text: parent.text; color: window.textSecondary; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1; radius: 10 }
-                        }
-                    }
-
-                    // Manual lyrics load
-                    Row {
-                        Layout.alignment: Qt.AlignHCenter; spacing: 8
-                        Text { text: "o"; color: window.textMuted; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
-                        Button {
-                            text: "📝 Cargar letras .lrc manualmente"
-                            onClicked: openLyricsDialog.open()
-                            contentItem: Text { text: parent.text; color: window.lavaPurple; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            background: Rectangle { color: "transparent" }
                         }
                     }
                 }
