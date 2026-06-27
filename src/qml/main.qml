@@ -190,6 +190,111 @@ ApplicationWindow {
         }
     }
 
+    // ── Create New Project Dialog Modal ──────────────────────────────────────
+    Window {
+        id: createProjectDialog
+        visible: false
+        width: 500; height: 350
+        title: "Crear Nuevo Proyecto"
+        flags: Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint
+        color: window.bgDark
+        modality: Qt.ApplicationModal
+
+        ColumnLayout {
+            anchors.fill: parent; anchors.margins: 24
+            spacing: 16
+
+            Text {
+                text: "✨ Crear Nuevo Proyecto"
+                font.pixelSize: 20; font.bold: true; color: window.textPrimary
+            }
+
+            Text {
+                text: "Configura las opciones iniciales para tu video musical."
+                font.pixelSize: 12; color: window.textSecondary
+            }
+
+            // Input: Project Name
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 4
+                Text { text: "Nombre del Proyecto"; font.pixelSize: 11; font.bold: true; color: window.textSecondary }
+                Rectangle {
+                    Layout.fillWidth: true; height: 40
+                    color: window.bgCard; border.color: nameField.activeFocus ? window.lavaRed : window.borderSubtle
+                    border.width: nameField.activeFocus ? 2 : 1; radius: 6
+                    TextField {
+                        id: nameField
+                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                        placeholderText: "Mi Video Viral"
+                        color: window.textPrimary; background: Item {}
+                        font.pixelSize: 13; placeholderTextColor: window.textMuted
+                    }
+                }
+            }
+
+            // Input: Output Directory
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 4
+                Text { text: "Carpeta de Trabajo"; font.pixelSize: 11; font.bold: true; color: window.textSecondary }
+                Rectangle {
+                    Layout.fillWidth: true; height: 40
+                    color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 6
+                    RowLayout {
+                        anchors.fill: parent; anchors.margins: 4
+                        TextField {
+                            id: workspaceDirField
+                            Layout.fillWidth: true
+                            text: "C:/Users/" + Qt.platform.os + "/Music/LavaLyrics"
+                            color: window.textSecondary; background: Item {}
+                            font.pixelSize: 12; placeholderTextColor: window.textMuted
+                        }
+                    }
+                }
+            }
+
+            Item { Layout.fillHeight: true }
+
+            // Dialog Actions
+            RowLayout {
+                Layout.fillWidth: true; spacing: 12
+                
+                Button {
+                    text: "Cancelar"
+                    Layout.fillWidth: true; implicitHeight: 40
+                    onClicked: createProjectDialog.close()
+                    contentItem: Text { text: parent.text; color: window.textSecondary; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1; radius: 6 }
+                }
+
+                Button {
+                    text: "Crear Proyecto 🚀"
+                    Layout.fillWidth: true; implicitHeight: 40
+                    enabled: nameField.text.trim() !== ""
+                    onClicked: {
+                        projectMgr.newProject(nameField.text.trim())
+                        outDirField.text = workspaceDirField.text.trim()
+                        createProjectDialog.close()
+                        currentScreen = 1 // Go to Download screen
+                    }
+                    contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle {
+                        color: parent.enabled ? (parent.hovered ? "#ff5252" : window.lavaRed) : window.bgCard
+                        radius: 6
+                    }
+                }
+            }
+        }
+
+        function open() {
+            nameField.text = ""
+            visible = true
+        }
+
+        function close() {
+            visible = false
+        }
+    }
+
     // ── Root layout ────────────────────────────────────────────────────────
     ColumnLayout {
         anchors.fill: parent
@@ -289,17 +394,18 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     spacing: 32
 
+                    // Header
                     Column {
                         spacing: 8
                         Layout.alignment: Qt.AlignHCenter
                         Row {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            Text { text: "Lava"; font.pixelSize: 56; font.bold: true; color: window.textPrimary }
-                            Text { text: "Lyrics"; font.pixelSize: 56; font.bold: true; color: window.lavaRed }
+                            Text { text: "Lava"; font.pixelSize: 48; font.bold: true; color: window.textPrimary }
+                            Text { text: "Lyrics"; font.pixelSize: 48; font.bold: true; color: window.lavaRed }
                         }
                         Text {
                             text: "Crea clips musicales virales con letras sincronizadas"
-                            font.pixelSize: 16; color: window.textSecondary
+                            font.pixelSize: 14; color: window.textSecondary
                             anchors.horizontalCenter: parent.horizontalCenter
                         }
                         Text {
@@ -309,65 +415,106 @@ ApplicationWindow {
                         }
                     }
 
-                    Row {
-                        spacing: 16
+                    // Main Action Area (Nuevo Proyecto Card)
+                    Rectangle {
+                        width: 280; height: 160
+                        color: window.bgCard
+                        border.color: newProjectMouse.containsMouse ? window.lavaRed : window.borderSubtle
+                        border.width: 1; radius: 12
                         Layout.alignment: Qt.AlignHCenter
+                        
+                        // Glow effect
+                        Rectangle {
+                            anchors.fill: parent; radius: 12; z: -1
+                            color: "transparent"; border.color: window.lavaRed; border.width: 2
+                            opacity: newProjectMouse.containsMouse ? 0.3 : 0
+                        }
 
-                        // Quick action cards
-                        Repeater {
-                            model: [
-                                {icon: "⬇️", label: "Descargar canción", sub: "YouTube / Spotify", action: 1},
-                                {icon: "📂", label: "Abrir audio local",  sub: "MP3, M4A, WAV…",   action: -1},
-                                {icon: "📁", label: "Abrir proyecto",     sub: "Archivo .llproj",  action: -2},
-                            ]
-                            Rectangle {
-                                width: 200; height: 140
-                                color: window.bgCard
-                                border.color: cardMouse.containsMouse ? window.lavaRed : window.borderSubtle
-                                border.width: 1; radius: 12
-
-                                Behavior on border.color { ColorAnimation { duration: 150 } }
-
-                                Column {
-                                    anchors.centerIn: parent
-                                    spacing: 10
-                                    Text { text: modelData.icon; font.pixelSize: 32; anchors.horizontalCenter: parent.horizontalCenter }
-                                    Text { text: modelData.label; font.pixelSize: 14; font.bold: true; color: window.textPrimary; anchors.horizontalCenter: parent.horizontalCenter }
-                                    Text { text: modelData.sub; font.pixelSize: 11; color: window.textMuted; anchors.horizontalCenter: parent.horizontalCenter }
-                                }
-
-                                MouseArea {
-                                    id: cardMouse
-                                    anchors.fill: parent; hoverEnabled: true
-                                    onClicked: {
-                                        if      (modelData.action === 1)  currentScreen = 1
-                                        else if (modelData.action === -1) openMediaDialog.open()
-                                        else if (modelData.action === -2) { /* open project dialog */ }
-                                    }
-                                }
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 12
+                            Text {
+                                text: "➕"
+                                font.pixelSize: 36
+                                anchors.horizontalCenter: parent.horizontalCenter
                             }
+                            Text {
+                                text: "NUEVO PROYECTO"
+                                font.pixelSize: 15
+                                font.bold: true
+                                color: window.textPrimary
+                                anchors.horizontalCenter: parent.horizontalCenter
+                            }
+                            Text {
+                                text: "Comienza una nueva creación"
+                                font.pixelSize: 11
+                                color: window.textMuted
+                                anchors.horizontalCenter: parent.horizontalCenter
+                            }
+                        }
+
+                        MouseArea {
+                            id: newProjectMouse
+                            anchors.fill: parent; hoverEnabled: true
+                            onClicked: createProjectDialog.open()
                         }
                     }
 
-                    // Recent projects
-                    Column {
-                        spacing: 8
+                    // Table with recent projects
+                    ColumnLayout {
+                        spacing: 10
                         Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 600
                         visible: projectMgr.recentProjects().length > 0
 
-                        Text { text: "Proyectos recientes"; color: window.textMuted; font.pixelSize: 12; anchors.horizontalCenter: parent.horizontalCenter }
+                        Text {
+                            text: "Proyectos recientes"
+                            color: window.textSecondary; font.pixelSize: 14; font.bold: true
+                            Layout.alignment: Qt.AlignLeft
+                        }
+
+                        // Recent projects table header
+                        Rectangle {
+                            Layout.fillWidth: true; height: 30
+                            color: window.bgDark
+                            border.color: window.borderSubtle; border.width: 1
+                            radius: 6
+
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+                                Text { text: "Nombre de Proyecto"; color: window.textMuted; font.pixelSize: 11; Layout.fillWidth: true }
+                                Text { text: "Ubicación"; color: window.textMuted; font.pixelSize: 11; Layout.preferredWidth: 250 }
+                            }
+                        }
+
+                        // Table rows
                         Repeater {
-                            model: projectMgr.recentProjects().slice(0, 4)
+                            model: projectMgr.recentProjects().slice(0, 5)
                             Rectangle {
-                                width: 500; height: 36
-                                color: recentMouse.containsMouse ? window.bgElevated : "transparent"
-                                border.color: window.borderSubtle; border.width: 1; radius: 6
-                                Text {
-                                    anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
-                                    text: "📁 " + modelData.split("\\").pop()
-                                    color: window.textSecondary; font.pixelSize: 12; elide: Text.ElideLeft; width: parent.width - 24
+                                Layout.fillWidth: true; height: 38
+                                color: rowMouse.containsMouse ? window.bgElevated : "transparent"
+                                border.color: window.borderSubtle; border.width: 1
+                                radius: 6
+
+                                RowLayout {
+                                    anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+                                    Text {
+                                        text: "📁  " + modelData.split("\\").pop().replace(".llproj", "")
+                                        color: window.textPrimary; font.pixelSize: 12; font.bold: true
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        text: modelData
+                                        color: window.textMuted; font.pixelSize: 11; elide: Text.ElideLeft
+                                        Layout.preferredWidth: 250
+                                    }
                                 }
-                                MouseArea { id: recentMouse; anchors.fill: parent; hoverEnabled: true; onClicked: projectMgr.loadProject(modelData) }
+
+                                MouseArea {
+                                    id: rowMouse
+                                    anchors.fill: parent; hoverEnabled: true
+                                    onClicked: projectMgr.loadProject(modelData)
+                                }
                             }
                         }
                     }
