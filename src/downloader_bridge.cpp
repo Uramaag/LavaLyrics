@@ -77,12 +77,16 @@ void DownloaderBridge::searchOnline(const QString &query)
     safeQuery.replace("\"", "\\\"");
 
     QString script = QString(R"(
-import sys, json, subprocess, urllib.request, urllib.parse
+import sys, json, subprocess, urllib.request, urllib.parse, ssl
 
 query = "%1"
 results = []
+# Disable SSL verification for Windows certificate issues
+ssl_ctx = ssl.create_default_context()
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
+
 try:
-    # Function to run a search and append to results
     def search_platform(prefix, platform_name):
         try:
             out = subprocess.run([
@@ -91,7 +95,8 @@ try:
                 "--dump-json",
                 "--flat-playlist",
                 "--no-warnings",
-                "--ignore-errors"
+                "--ignore-errors",
+                "--no-check-certificates"
             ], capture_output=True, text=True, check=False)
 
             for line in out.stdout.split('\n'):
@@ -100,23 +105,32 @@ try:
                     data = json.loads(line)
                     title = data.get('title', 'Unknown')
                     uploader = data.get('uploader', 'Unknown Artist')
+                    vid_id = data.get('id', '')
                     if uploader == 'Unknown Artist' and '-' in title:
                         parts = title.split('-', 1)
                         uploader = parts[0].strip()
                         title = parts[1].strip()
-                    
+
                     has_lyrics = False
                     try:
                         params = urllib.parse.urlencode({'artist_name': uploader, 'track_name': title})
-                        url = f"https://lrclib.net/api/get?{params}"
-                        req = urllib.request.Request(url, headers={'User-Agent': 'LavaLyrics/1.0 (https://github.com/Uramaag/LavaLyrics)'})
-                        with urllib.request.urlopen(req, timeout=2) as response:
+                        lrc_url = f"https://lrclib.net/api/get?{params}"
+                        req = urllib.request.Request(lrc_url, headers={'User-Agent': 'LavaLyrics/1.0'})
+                        with urllib.request.urlopen(req, timeout=3, context=ssl_ctx) as response:
                             lrc_data = json.loads(response.read())
                             if lrc_data.get('syncedLyrics'):
                                 has_lyrics = True
                     except:
                         pass
-                        
+
+                    if platform_name == 'YouTube':
+                        song_url = data.get('url') or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else '')
+                    else:
+                        song_url = data.get('url') or data.get('webpage_url', '')
+
+                    if not song_url:
+                        continue
+
                     results.append({
                         "type": "song",
                         "title": title,
@@ -125,16 +139,16 @@ try:
                         "platform": platform_name,
                         "hasLyrics": has_lyrics,
                         "isDownloaded": False,
-                        "url": data.get('url', f"https://www.youtube.com/watch?v={data.get('id')}" if platform_name == 'YouTube' else data.get('url'))
+                        "url": song_url
                     })
                 except:
                     continue
-        except Exception:
+        except Exception as ex:
             pass
 
-    search_platform("ytsearch3:", "YouTube")
+    search_platform("ytsearch5:", "YouTube")
     search_platform("scsearch3:", "SoundCloud")
-            
+
     print(json.dumps(results), flush=True)
 except Exception as e:
     print(f"SEARCH_ERROR:{str(e)}", file=sys.stderr)
@@ -334,11 +348,16 @@ QString DownloaderBridge::buildYtdlpScript(const QString &url, const QString &ou
     escaped_dir.replace("\\", "\\\\");
 
     return QString(R"(
-import sys, os, json, urllib.request, subprocess
+import sys, os, json, urllib.request, urllib.parse, subprocess, ssl
 
 url = "%1"
 out_dir = r"%2"
 os.makedirs(out_dir, exist_ok=True)
+
+# Disable SSL verification for Windows certificate issues
+ssl_ctx = ssl.create_default_context()
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
 
 print("[download] Iniciando con yt-dlp...", flush=True)
 
@@ -351,6 +370,7 @@ result = subprocess.run([
     "--output", os.path.join(out_dir, "%(title)s.%(ext)s"),
     "--write-info-json",
     "--no-playlist",
+    "--no-check-certificates",
     url
 ], capture_output=False, text=True)
 
@@ -366,10 +386,11 @@ if info_files:
     print(f"[spotdl] Buscando letras: {artist} - {title}", flush=True)
 
     try:
+        import urllib.parse
         params = urllib.parse.urlencode({'artist_name': artist, 'track_name': title, 'duration': duration})
-        url = f"https://lrclib.net/api/get?{params}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'LavaLyrics/1.0 (https://github.com/Uramaag/LavaLyrics)'})
-        with urllib.request.urlopen(req, timeout=10) as response:
+        lrc_url = f"https://lrclib.net/api/get?{params}"
+        req = urllib.request.Request(lrc_url, headers={'User-Agent': 'LavaLyrics/1.0'})
+        with urllib.request.urlopen(req, timeout=10, context=ssl_ctx) as response:
             data = json.loads(response.read())
             if data.get('syncedLyrics'):
                 lrc_path = os.path.join(out_dir, "lyrics.lrc")
