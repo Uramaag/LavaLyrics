@@ -401,11 +401,24 @@ ApplicationWindow {
                 }
 
                 Button {
-                    text: platformSearchDialog.isLoading ? "⏳" : "Buscar 🚀"
+                    id: searchBtn
                     implicitWidth: 100; implicitHeight: 38
                     onClicked: platformSearchDialog.performBackendSearch()
-                    contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                    background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 6 }
+                    
+                    contentItem: RowLayout {
+                        spacing: 6; anchors.centerIn: parent
+                        BusyIndicator {
+                            running: platformSearchDialog.isLoading
+                            visible: platformSearchDialog.isLoading
+                            Layout.preferredWidth: 20; Layout.preferredHeight: 20
+                        }
+                        Text { 
+                            text: platformSearchDialog.isLoading ? "Buscando..." : "Buscar 🚀"
+                            color: "#fff"; font.bold: true; font.pixelSize: 11
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                    }
+                    background: Rectangle { color: searchBtn.hovered ? "#ff5252" : window.lavaRed; radius: 6 }
                 }
             }
 
@@ -519,10 +532,17 @@ ApplicationWindow {
                                 }
 
                                 // Platform
-                                Text {
-                                    text: modelData.platform
-                                    color: window.textSecondary; font.pixelSize: 10
-                                    Layout.preferredWidth: 110
+                                RowLayout {
+                                    Layout.preferredWidth: 110; spacing: 4
+                                    Text {
+                                        text: modelData.platform === "YouTube" ? "▶" : (modelData.platform === "SoundCloud" ? "☁" : "🎵")
+                                        color: modelData.platform === "YouTube" ? "#ff4040" : (modelData.platform === "SoundCloud" ? "#ff7700" : "#1db954")
+                                        font.pixelSize: 10
+                                    }
+                                    Text {
+                                        text: modelData.platform
+                                        color: window.textSecondary; font.pixelSize: 10
+                                    }
                                 }
 
                                 // Has lyrics

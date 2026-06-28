@@ -81,48 +81,57 @@ import sys, json, subprocess, urllib.request, urllib.parse
 
 query = "%1"
 results = []
-
 try:
-    # Use yt-dlp to search youtube/ytmusic for 5 tracks
-    yt_out = subprocess.run([
-        sys.executable, "-m", "yt_dlp",
-        f"ytsearch5:{query}",
-        "--dump-json",
-        "--flat-playlist",
-        "--no-warnings"
-    ], capture_output=True, text=True, check=True)
-
-    for line in yt_out.stdout.split('\n'):
-        if not line.strip(): continue
+    # Function to run a search and append to results
+    def search_platform(prefix, platform_name):
         try:
-            data = json.loads(line)
-            title = data.get('title', 'Unknown')
-            uploader = data.get('uploader', 'Unknown Artist')
-            duration = data.get('duration', 0)
-            
-            # Simple check for lrclib lyrics
-            has_lyrics = False
-            try:
-                params = urllib.parse.urlencode({'artist_name': uploader, 'track_name': title})
-                req = urllib.request.urlopen(f"https://lrclib.net/api/get?{params}", timeout=2)
-                lrc_data = json.loads(req.read())
-                if lrc_data.get('syncedLyrics'):
-                    has_lyrics = True
-            except:
-                pass
-                
-            results.append({
-                "type": "song",
-                "title": title,
-                "artist": uploader,
-                "album": "Single/Unknown",
-                "platform": "YouTube",
-                "hasLyrics": has_lyrics,
-                "isDownloaded": False,
-                "url": data.get('url', f"https://www.youtube.com/watch?v={data.get('id')}")
-            })
-        except:
-            continue
+            out = subprocess.run([
+                sys.executable, "-m", "yt_dlp",
+                f"{prefix}{query}",
+                "--dump-json",
+                "--flat-playlist",
+                "--no-warnings",
+                "--ignore-errors"
+            ], capture_output=True, text=True, check=False)
+
+            for line in out.stdout.split('\n'):
+                if not line.strip(): continue
+                try:
+                    data = json.loads(line)
+                    title = data.get('title', 'Unknown')
+                    uploader = data.get('uploader', 'Unknown Artist')
+                    if uploader == 'Unknown Artist' and '-' in title:
+                        parts = title.split('-', 1)
+                        uploader = parts[0].strip()
+                        title = parts[1].strip()
+                    
+                    has_lyrics = False
+                    try:
+                        params = urllib.parse.urlencode({'artist_name': uploader, 'track_name': title})
+                        req = urllib.request.urlopen(f"https://lrclib.net/api/get?{params}", timeout=1)
+                        lrc_data = json.loads(req.read())
+                        if lrc_data.get('syncedLyrics'):
+                            has_lyrics = True
+                    except:
+                        pass
+                        
+                    results.append({
+                        "type": "song",
+                        "title": title,
+                        "artist": uploader,
+                        "album": "Single",
+                        "platform": platform_name,
+                        "hasLyrics": has_lyrics,
+                        "isDownloaded": False,
+                        "url": data.get('url', f"https://www.youtube.com/watch?v={data.get('id')}" if platform_name == 'YouTube' else data.get('url'))
+                    })
+                except:
+                    continue
+        except Exception:
+            pass
+
+    search_platform("ytsearch3:", "YouTube")
+    search_platform("scsearch3:", "SoundCloud")
             
     print(json.dumps(results), flush=True)
 except Exception as e:
@@ -363,7 +372,10 @@ if info_files:
     except Exception as e:
         print(f"[spotdl] No se encontraron letras: {e}", flush=True)
 
-import urllib.parse
+# If audio was downloaded successfully but yt-dlp returned 1 (e.g. warnings), exit 0
+if any(f.endswith('.mp3') for f in os.listdir(out_dir)):
+    sys.exit(0)
+
 sys.exit(result.returncode)
 )").arg(url).arg(escaped_dir);
 }
