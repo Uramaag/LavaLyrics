@@ -925,11 +925,6 @@ ApplicationWindow {
                                 }
                             }
 
-                            MouseArea {
-                                id: newProjectMouse
-                                anchors.fill: parent; hoverEnabled: true
-                                onClicked: createProjectDialog.open()
-                            }
                         }
 
                         // Abrir Proyecto Card
