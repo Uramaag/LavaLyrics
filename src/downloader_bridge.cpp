@@ -6,10 +6,14 @@
 #include <QProcess>
 #include <QRegularExpression>
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 
 DownloaderBridge::DownloaderBridge(QObject *parent)
     : QObject(parent)
     , m_process(new QProcess(this))
+    , m_searchProcess(new QProcess(this))
     , m_isDownloading(false)
     , m_progress(0)
 {
@@ -18,12 +22,20 @@ DownloaderBridge::DownloaderBridge(QObject *parent)
     connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, &DownloaderBridge::onProcessFinished);
     connect(m_process, &QProcess::errorOccurred, this, &DownloaderBridge::onProcessError);
+
+    connect(m_searchProcess, &QProcess::readyReadStandardOutput, this, &DownloaderBridge::onSearchProcessOutput);
+    connect(m_searchProcess, &QProcess::readyReadStandardError,  this, &DownloaderBridge::onSearchProcessOutput);
+    connect(m_searchProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &DownloaderBridge::onSearchProcessFinished);
+    connect(m_searchProcess, &QProcess::errorOccurred, this, &DownloaderBridge::onSearchProcessError);
 }
 
 DownloaderBridge::~DownloaderBridge()
 {
     if (m_process->state() != QProcess::NotRunning)
         m_process->kill();
+    if (m_searchProcess->state() != QProcess::NotRunning)
+        m_searchProcess->kill();
 }
 
 bool DownloaderBridge::isDownloading() const { return m_isDownloading; }
@@ -47,6 +59,80 @@ QString DownloaderBridge::detectPython()
     }
     return QString();
 }
+
+void DownloaderBridge::searchOnline(const QString &query)
+{
+    if (m_searchProcess->state() != QProcess::NotRunning) {
+        m_searchProcess->kill();
+        m_searchProcess->waitForFinished(500);
+    }
+
+    QString python = m_pythonPath.isEmpty() ? detectPython() : m_pythonPath;
+    if (python.isEmpty()) {
+        emit searchFailed("ERR_NO_PYTHON", "Python no encontrado en el sistema. Es necesario para la búsqueda.");
+        return;
+    }
+
+    QString safeQuery = query;
+    safeQuery.replace("\"", "\\\"");
+
+    QString script = QString(R"(
+import sys, json, subprocess, urllib.request, urllib.parse
+
+query = "%1"
+results = []
+
+try:
+    # Use yt-dlp to search youtube/ytmusic for 5 tracks
+    yt_out = subprocess.run([
+        sys.executable, "-m", "yt_dlp",
+        f"ytsearch5:{query}",
+        "--dump-json",
+        "--flat-playlist",
+        "--no-warnings"
+    ], capture_output=True, text=True, check=True)
+
+    for line in yt_out.stdout.split('\n'):
+        if not line.strip(): continue
+        try:
+            data = json.loads(line)
+            title = data.get('title', 'Unknown')
+            uploader = data.get('uploader', 'Unknown Artist')
+            duration = data.get('duration', 0)
+            
+            # Simple check for lrclib lyrics
+            has_lyrics = False
+            try:
+                params = urllib.parse.urlencode({'artist_name': uploader, 'track_name': title})
+                req = urllib.request.urlopen(f"https://lrclib.net/api/get?{params}", timeout=2)
+                lrc_data = json.loads(req.read())
+                if lrc_data.get('syncedLyrics'):
+                    has_lyrics = True
+            except:
+                pass
+                
+            results.append({
+                "type": "song",
+                "title": title,
+                "artist": uploader,
+                "album": "Single/Unknown",
+                "platform": "YouTube",
+                "hasLyrics": has_lyrics,
+                "isDownloaded": False,
+                "url": data.get('url', f"https://www.youtube.com/watch?v={data.get('id')}")
+            })
+        except:
+            continue
+            
+    print(json.dumps(results), flush=True)
+except Exception as e:
+    print(f"SEARCH_ERROR:{str(e)}", file=sys.stderr)
+    sys.exit(1)
+)").arg(safeQuery);
+
+    m_searchProcess->start(python, {"-c", script});
+}
+
 
 void DownloaderBridge::downloadFromUrl(const QString &url, const QString &outputDir)
 {
@@ -160,6 +246,44 @@ void DownloaderBridge::onProcessError(QProcess::ProcessError error)
     setStatus(msg);
     emit downloadFailed(msg);
 }
+
+void DownloaderBridge::onSearchProcessOutput()
+{
+    // Do nothing here, we process it all on finished
+}
+
+void DownloaderBridge::onSearchProcessFinished(int exitCode, QProcess::ExitStatus status)
+{
+    if (status == QProcess::CrashExit) {
+        emit searchFailed("ERR_CRASH", "El proceso de búsqueda se cerró inesperadamente.");
+        return;
+    }
+
+    QString stdErr = QString::fromUtf8(m_searchProcess->readAllStandardError());
+    QString stdOut = QString::fromUtf8(m_searchProcess->readAllStandardOutput());
+
+    if (exitCode != 0 || stdErr.contains("SEARCH_ERROR")) {
+        emit searchFailed("ERR_CODE_" + QString::number(exitCode), stdErr);
+        return;
+    }
+
+    // Try to parse JSON output
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(stdOut.toUtf8(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isArray()) {
+        emit searchFailed("ERR_PARSE", "No se pudo interpretar los resultados de la búsqueda: " + parseError.errorString());
+        return;
+    }
+
+    QVariantList results = doc.array().toVariantList();
+    emit searchCompleted(results);
+}
+
+void DownloaderBridge::onSearchProcessError(QProcess::ProcessError error)
+{
+    emit searchFailed("ERR_PROCESS_" + QString::number(error), "Error de ejecución: " + m_searchProcess->errorString());
+}
+
 
 void DownloaderBridge::setStatus(const QString &msg)
 {

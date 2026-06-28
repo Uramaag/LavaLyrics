@@ -72,7 +72,16 @@ ApplicationWindow {
         }
         function onDownloadFailed(error) {
             statusBar.showMsg("❌ Error: " + error)
-            toastErrorBox.triggerError(error)
+            toastErrorBox.triggerError("Error de Descarga: " + error)
+        }
+        function onSearchCompleted(results) {
+            platformSearchDialog.isLoading = false
+            platformSearchDialog.rawResults = results
+            platformSearchDialog.search()
+        }
+        function onSearchFailed(error, details) {
+            platformSearchDialog.isLoading = false
+            toastErrorBox.triggerError("Buscador: [Código " + error + "] " + details)
         }
     }
 
@@ -298,36 +307,21 @@ ApplicationWindow {
 
         property string searchQuery: ""
         property bool filterOnlySynced: false
-        property var rawResults: [
-            // Sample tracks
-            { type: "song", title: "Ultimo Tema", artist: "Enjambre", album: "Imperfecto Extraño", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/6Z1Z" },
-            { type: "song", title: "El Ultimo Tema", artist: "Enjambre", album: "Imperfecto Extraño", platform: "YouTube Music", hasLyrics: true, isDownloaded: false, url: "https://music.youtube.com/watch?v=7Y" },
-            { type: "song", title: "Blinding Lights", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/0VjIjja4nUo2Y2tJ68wZ2V" },
-            { type: "song", title: "Starboy", artist: "The Weeknd", album: "Starboy", platform: "YouTube Music", hasLyrics: true, isDownloaded: false, url: "https://music.youtube.com/watch?v=dMMUB-goaLQ" },
-            { type: "song", title: "Shape of You", artist: "Ed Sheeran", album: "÷ (Divide)", platform: "SoundCloud", hasLyrics: false, isDownloaded: false, url: "https://soundcloud.com/edsheeran/shape-of-you" },
-            { type: "song", title: "As It Was", artist: "Harry Styles", album: "Harry's House", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/4D7tIBBiBqi8tGGLJ6jYaa" },
-            // Sample albums (expanded lists)
-            { type: "album", title: "Imperfecto Extraño", artist: "Enjambre", platform: "Spotify", isExpanded: false, tracks: [
-                { type: "song", title: "El Ultimo Tema", artist: "Enjambre", album: "Imperfecto Extraño", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/6Z1Z" },
-                { type: "song", title: "Enemigo", artist: "Enjambre", album: "Imperfecto Extraño", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/6Z1X" }
-            ]},
-            { type: "album", title: "After Hours", artist: "The Weeknd", platform: "Spotify", isExpanded: false, tracks: [
-                { type: "song", title: "Alone Again", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/4454nVR6t5P14647385" },
-                { type: "song", title: "Too Late", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/4454nVR6t5P14647386" },
-                { type: "song", title: "Blinding Lights", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/0VjIjja4nUo2Y2tJ68wZ2V" }
-            ]},
-            // Sample artists (expanded lists)
-            { type: "artist", title: "Enjambre", platform: "Spotify", isExpanded: false, tracks: [
-                { type: "song", title: "El Ultimo Tema", artist: "Enjambre", album: "Imperfecto Extraño", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/6Z1Z" },
-                { type: "song", title: "Dulce Soledad", artist: "Enjambre", album: "Daltónico", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/DulceS" }
-            ]},
-            { type: "artist", title: "The Weeknd", platform: "Spotify", isExpanded: false, tracks: [
-                { type: "song", title: "Save Your Tears", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/5QO791xpwIMUpIHlhN1hlV" },
-                { type: "song", title: "Die For You", artist: "The Weeknd", album: "Starboy", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/2H7Up7jU4zk6w0tyzXv35B" }
-            ]}
-        ]
+        property var rawResults: []
 
         property var filteredResults: []
+        property bool isLoading: false
+
+        function performBackendSearch() {
+            let q = searchField.text.trim()
+            if (q.length > 0) {
+                isLoading = true
+                downloader.searchOnline(q)
+            } else {
+                rawResults = []
+                search()
+            }
+        }
 
         function search() {
             let query = searchField.text.trim().toLowerCase()
@@ -338,8 +332,7 @@ ApplicationWindow {
                     if (item.type === "song") {
                         if (filterOnlySynced && !item.hasLyrics) continue
                         res.push(item)
-                    } else {
-                        // For albums and artists, filter their child tracks
+                    } else if (item.tracks) {
                         let childTracks = []
                         for (let j = 0; j < item.tracks.length; j++) {
                             let track = item.tracks[j]
@@ -347,7 +340,6 @@ ApplicationWindow {
                             childTracks.push(track)
                         }
                         if (childTracks.length > 0) {
-                            // Create copy with filtered tracks
                             res.push({
                                 type: item.type,
                                 title: item.title,
@@ -396,12 +388,12 @@ ApplicationWindow {
                             color: window.textPrimary; placeholderTextColor: window.textMuted
                             font.pixelSize: 12
                             onTextChanged: debounceTimer.restart()
-                            onAccepted: platformSearchDialog.search()
+                            onAccepted: platformSearchDialog.performBackendSearch()
                         }
                         Button {
                             text: "✕"
                             implicitWidth: 24; implicitHeight: 24
-                            onClicked: { searchField.text = ""; platformSearchDialog.search() }
+                            onClicked: { searchField.text = ""; platformSearchDialog.performBackendSearch() }
                             contentItem: Text { text: parent.text; color: window.textMuted; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                             background: Item {}
                         }
@@ -409,9 +401,9 @@ ApplicationWindow {
                 }
 
                 Button {
-                    text: "Buscar 🚀"
+                    text: platformSearchDialog.isLoading ? "⏳" : "Buscar 🚀"
                     implicitWidth: 100; implicitHeight: 38
-                    onClicked: platformSearchDialog.search()
+                    onClicked: platformSearchDialog.performBackendSearch()
                     contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 6 }
                 }
@@ -421,7 +413,7 @@ ApplicationWindow {
                 id: debounceTimer
                 interval: 1000
                 repeat: false
-                onTriggered: platformSearchDialog.search()
+                onTriggered: platformSearchDialog.performBackendSearch()
             }
 
             // Filter checkbox row
@@ -467,8 +459,27 @@ ApplicationWindow {
 
                         // Main row
                         Rectangle {
-                            Layout.fillWidth: true; height: 42
-                            color: window.bgCard; radius: 6; border.color: window.borderSubtle; border.width: 1
+                            Layout.fillWidth: true; Layout.preferredHeight: 42
+                            color: mouseArea.containsMouse ? window.bgElevated : window.bgCard
+                            radius: 6; border.color: window.borderSubtle; border.width: 1
+
+                            MouseArea {
+                                id: mouseArea
+                                anchors.fill: parent; hoverEnabled: true
+                                onClicked: {
+                                    if (modelData.type !== "song") {
+                                        modelData.isExpanded = !modelData.isExpanded
+                                        platformSearchDialog.search() // trigger redraw
+                                    }
+                                }
+                                onDoubleClicked: {
+                                    if (modelData.type === "song") {
+                                        downloadProgressDialog.visible = true
+                                        let outDir = projectMgr.workspacePath + "\\media"
+                                        downloader.downloadFromUrl(modelData.url, outDir)
+                                    }
+                                }
+                            }
 
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
@@ -885,6 +896,12 @@ ApplicationWindow {
                                 opacity: newProjectMouse.containsMouse ? 0.3 : 0
                             }
 
+                            MouseArea {
+                                id: newProjectMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: { createProjectDialog.visible = true; createProjectDialog.reset() }
+                            }
                             Column {
                                 anchors.centerIn: parent
                                 spacing: 10

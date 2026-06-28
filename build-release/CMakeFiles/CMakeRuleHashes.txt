@@ -1,0 +1,4 @@
+# Hashes of file build rules.
+636467275fa205c785c7d5c8de2fb88d CMakeFiles/LavaLyrics_autogen
+0138bf45ce9bfd17ca19264f22309848 LavaLyrics_autogen/VLDSMZLXNG/qrc_qml.cpp
+681ef1429ddfa951ab5f07212b96ae18 LavaLyrics_autogen/timestamp

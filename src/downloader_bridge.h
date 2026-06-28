@@ -24,6 +24,8 @@ public:
     QString pythonPath() const;
     void setPythonPath(const QString &path);
 
+    Q_INVOKABLE void searchOnline(const QString &query);
+
     Q_INVOKABLE void downloadFromUrl(const QString &url, const QString &outputDir);
     Q_INVOKABLE void downloadSpotify(const QString &spotifyUrl, const QString &outputDir);
     Q_INVOKABLE void cancel();
@@ -35,14 +37,22 @@ signals:
     void statusMessageChanged();
     void downloadCompleted(const QString &audioPath, const QString &lyricsPath);
     void downloadFailed(const QString &error);
+    
+    void searchCompleted(const QVariantList &results);
+    void searchFailed(const QString &error, const QString &details);
 
 private slots:
     void onProcessOutput();
     void onProcessFinished(int exitCode, QProcess::ExitStatus status);
     void onProcessError(QProcess::ProcessError error);
 
+    void onSearchProcessOutput();
+    void onSearchProcessFinished(int exitCode, QProcess::ExitStatus status);
+    void onSearchProcessError(QProcess::ProcessError error);
+
 private:
     QProcess *m_process;
+    QProcess *m_searchProcess;
     bool m_isDownloading;
     int m_progress;
     QString m_statusMessage;

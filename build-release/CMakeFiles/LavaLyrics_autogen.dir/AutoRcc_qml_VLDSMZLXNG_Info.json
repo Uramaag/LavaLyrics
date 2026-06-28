@@ -1,0 +1,25 @@
+{
+	"BUILD_DIR" : "C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release/LavaLyrics_autogen",
+	"CMAKE_BINARY_DIR" : "C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release",
+	"CMAKE_CURRENT_BINARY_DIR" : "C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics",
+	"CMAKE_SOURCE_DIR" : "C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics",
+	"CROSS_CONFIG" : false,
+	"GENERATOR" : "MinGW Makefiles",
+	"INCLUDE_DIR" : "C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release/LavaLyrics_autogen/include",
+	"INPUTS" : 
+	[
+		"C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/src/qml/main.qml"
+	],
+	"LOCK_FILE" : "C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release/CMakeFiles/LavaLyrics_autogen.dir/AutoRcc_qml_VLDSMZLXNG_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "--no-zstd", "-name", "qml" ],
+	"OUTPUT_CHECKSUM" : "VLDSMZLXNG",
+	"OUTPUT_NAME" : "qrc_qml.cpp",
+	"RCC_EXECUTABLE" : "C:/Qt/6.7.2/mingw_64/./bin/rcc.exe",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release/CMakeFiles/LavaLyrics_autogen.dir/AutoRcc_qml_VLDSMZLXNG_Used.txt",
+	"SOURCE" : "C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/src/qml/qml.qrc",
+	"USE_BETTER_GRAPH" : false,
+	"VERBOSITY" : 0
+}

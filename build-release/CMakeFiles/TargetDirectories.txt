@@ -1,0 +1,5 @@
+C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release/CMakeFiles/LavaLyrics.dir
+C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release/CMakeFiles/edit_cache.dir
+C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release/CMakeFiles/rebuild_cache.dir
+C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release/CMakeFiles/LavaLyrics_autogen_timestamp_deps.dir
+C:/Users/Xilito/Documents/Antigravity Projects/LavaLyrics/build-release/CMakeFiles/LavaLyrics_autogen.dir

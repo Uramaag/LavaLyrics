@@ -32,6 +32,13 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
 
+    // Log QML engine warnings to console
+    QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError> &warnings) {
+        for (const auto &warning : warnings) {
+            std::cerr << "[QML Warning] " << warning.toString().toStdString() << std::endl;
+        }
+    });
+
     // Expose app version to QML
     engine.rootContext()->setContextProperty("APP_VERSION", app.applicationVersion());
 
