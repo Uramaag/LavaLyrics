@@ -72,6 +72,7 @@ ApplicationWindow {
         }
         function onDownloadFailed(error) {
             statusBar.showMsg("❌ Error: " + error)
+            toastErrorBox.triggerError(error)
         }
     }
 
@@ -83,6 +84,7 @@ ApplicationWindow {
         }
         function onExportFailed(error) {
             statusBar.showMsg("❌ Exportación fallida: " + error)
+            toastErrorBox.triggerError(error)
         }
     }
 
@@ -104,6 +106,7 @@ ApplicationWindow {
         }
         function onErrorOccurred(message) {
             statusBar.showMsg("❌ Error del Proyecto: " + message)
+            toastErrorBox.triggerError(message)
         }
     }
 
@@ -297,17 +300,27 @@ ApplicationWindow {
         property bool filterOnlySynced: false
         property var rawResults: [
             // Sample tracks
+            { type: "song", title: "Ultimo Tema", artist: "Enjambre", album: "Imperfecto Extraño", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/6Z1Z" },
+            { type: "song", title: "El Ultimo Tema", artist: "Enjambre", album: "Imperfecto Extraño", platform: "YouTube Music", hasLyrics: true, isDownloaded: false, url: "https://music.youtube.com/watch?v=7Y" },
             { type: "song", title: "Blinding Lights", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/0VjIjja4nUo2Y2tJ68wZ2V" },
             { type: "song", title: "Starboy", artist: "The Weeknd", album: "Starboy", platform: "YouTube Music", hasLyrics: true, isDownloaded: false, url: "https://music.youtube.com/watch?v=dMMUB-goaLQ" },
             { type: "song", title: "Shape of You", artist: "Ed Sheeran", album: "÷ (Divide)", platform: "SoundCloud", hasLyrics: false, isDownloaded: false, url: "https://soundcloud.com/edsheeran/shape-of-you" },
             { type: "song", title: "As It Was", artist: "Harry Styles", album: "Harry's House", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/4D7tIBBiBqi8tGGLJ6jYaa" },
             // Sample albums (expanded lists)
+            { type: "album", title: "Imperfecto Extraño", artist: "Enjambre", platform: "Spotify", isExpanded: false, tracks: [
+                { type: "song", title: "El Ultimo Tema", artist: "Enjambre", album: "Imperfecto Extraño", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/6Z1Z" },
+                { type: "song", title: "Enemigo", artist: "Enjambre", album: "Imperfecto Extraño", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/6Z1X" }
+            ]},
             { type: "album", title: "After Hours", artist: "The Weeknd", platform: "Spotify", isExpanded: false, tracks: [
                 { type: "song", title: "Alone Again", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/4454nVR6t5P14647385" },
                 { type: "song", title: "Too Late", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/4454nVR6t5P14647386" },
                 { type: "song", title: "Blinding Lights", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/0VjIjja4nUo2Y2tJ68wZ2V" }
             ]},
             // Sample artists (expanded lists)
+            { type: "artist", title: "Enjambre", platform: "Spotify", isExpanded: false, tracks: [
+                { type: "song", title: "El Ultimo Tema", artist: "Enjambre", album: "Imperfecto Extraño", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/6Z1Z" },
+                { type: "song", title: "Dulce Soledad", artist: "Enjambre", album: "Daltónico", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/DulceS" }
+            ]},
             { type: "artist", title: "The Weeknd", platform: "Spotify", isExpanded: false, tracks: [
                 { type: "song", title: "Save Your Tears", artist: "The Weeknd", album: "After Hours", platform: "Spotify", hasLyrics: true, isDownloaded: true, url: "https://open.spotify.com/track/5QO791xpwIMUpIHlhN1hlV" },
                 { type: "song", title: "Die For You", artist: "The Weeknd", album: "Starboy", platform: "Spotify", hasLyrics: true, isDownloaded: false, url: "https://open.spotify.com/track/2H7Up7jU4zk6w0tyzXv35B" }
@@ -1514,5 +1527,80 @@ ApplicationWindow {
         }
 
         QtObject { id: statusBar; function showMsg(msg) { statusBarRect.showMsg(msg) } }
+    }
+
+    // ── Global Error Toast ─────────────────────────────────────────────────
+    Rectangle {
+        id: toastErrorBox
+        visible: false
+        width: 480; height: 75; radius: 8
+        color: "#1e0f0f"; border.color: "#ff3e3e"; border.width: 1.5
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 30
+        anchors.horizontalCenter: parent.horizontalCenter
+        z: 99999
+
+        property string errorDetails: ""
+
+        RowLayout {
+            anchors.fill: parent; anchors.margins: 12; spacing: 12
+
+            Text {
+                text: "⚠️"
+                font.pixelSize: 22; Layout.alignment: Qt.AlignVCenter
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2; Layout.alignment: Qt.AlignVCenter
+                Text {
+                    text: "¡Ocurrió un error en el backend!"
+                    color: "#ff8b8b"; font.pixelSize: 11; font.bold: true
+                }
+                Text {
+                    text: toastErrorBox.errorDetails
+                    color: "#ffbaba"; font.pixelSize: 10
+                    elide: Text.ElideRight; Layout.fillWidth: true
+                }
+            }
+
+            Button {
+                text: "Copiar"
+                implicitWidth: 70; implicitHeight: 28
+                onClicked: {
+                    searchField.text = toastErrorBox.errorDetails // Use a dummy helper to set/get or clipboard
+                    // Standard way in Qt QML to copy to clipboard is using an invisible TextInput
+                    clipboardHelper.text = toastErrorBox.errorDetails
+                    clipboardHelper.selectAll()
+                    clipboardHelper.copy()
+                    statusBar.showMsg("¡Copiado al portapapeles!")
+                }
+                contentItem: Text { text: parent.text; color: "#fff"; font.pixelSize: 10; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                background: Rectangle { color: parent.hovered ? "#4a1111" : "#340a0a"; border.color: "#ff3e3e"; border.width: 1; radius: 4 }
+            }
+
+            Button {
+                text: "✕"
+                implicitWidth: 24; implicitHeight: 28
+                onClicked: toastErrorBox.visible = false
+                contentItem: Text { text: parent.text; color: "#ff8b8b"; font.pixelSize: 11; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                background: Item {}
+            }
+        }
+
+        TextInput {
+            id: clipboardHelper
+            visible: false
+        }
+
+        function triggerError(msg) {
+            errorDetails = msg
+            visible = true
+            toastTimer.restart()
+        }
+
+        Timer {
+            id: toastTimer
+            interval: 8000
+            onTriggered: toastErrorBox.visible = false
+        }
     }
 }
