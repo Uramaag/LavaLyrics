@@ -458,15 +458,18 @@ ApplicationWindow {
             }
 
             // Results List
-            ScrollView {
-                Layout.fillWidth: true; Layout.fillHeight: true; clip: true
-                ListView {
-                    id: searchListView
-                    anchors.fill: parent
-                    model: platformSearchDialog.filteredResults
-                    spacing: 4
+            Item {
+                Layout.fillWidth: true; Layout.fillHeight: true
 
-                    delegate: ColumnLayout {
+                ScrollView {
+                    anchors.fill: parent; clip: true
+                    ListView {
+                        id: searchListView
+                        anchors.fill: parent
+                        model: platformSearchDialog.filteredResults
+                        spacing: 4
+
+                        delegate: ColumnLayout {
                         width: searchListView.width
                         spacing: 2
 
@@ -627,6 +630,31 @@ ApplicationWindow {
                                 }
                             }
                         }
+                    }
+                }
+
+                // Empty state
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    visible: !platformSearchDialog.isLoading && platformSearchDialog.filteredResults.length === 0
+                    spacing: 12
+                    Text {
+                        text: "🔍"
+                        font.pixelSize: 48
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                    Text {
+                        text: searchField.text.length > 0 ? "No se encontraron canciones" : "Busca una canción o artista"
+                        color: window.textSecondary
+                        font.pixelSize: 14
+                        font.bold: true
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                    Text {
+                        text: searchField.text.length > 0 ? "Intenta con otros términos o en otra plataforma" : "Los resultados aparecerán aquí"
+                        color: window.textMuted
+                        font.pixelSize: 11
+                        Layout.alignment: Qt.AlignHCenter
                     }
                 }
             }

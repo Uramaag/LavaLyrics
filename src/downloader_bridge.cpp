@@ -108,10 +108,12 @@ try:
                     has_lyrics = False
                     try:
                         params = urllib.parse.urlencode({'artist_name': uploader, 'track_name': title})
-                        req = urllib.request.urlopen(f"https://lrclib.net/api/get?{params}", timeout=1)
-                        lrc_data = json.loads(req.read())
-                        if lrc_data.get('syncedLyrics'):
-                            has_lyrics = True
+                        url = f"https://lrclib.net/api/get?{params}"
+                        req = urllib.request.Request(url, headers={'User-Agent': 'LavaLyrics/1.0 (https://github.com/Uramaag/LavaLyrics)'})
+                        with urllib.request.urlopen(req, timeout=2) as response:
+                            lrc_data = json.loads(response.read())
+                            if lrc_data.get('syncedLyrics'):
+                                has_lyrics = True
                     except:
                         pass
                         
@@ -242,8 +244,10 @@ void DownloaderBridge::onProcessFinished(int exitCode, QProcess::ExitStatus)
 
         emit downloadCompleted(audioFile, lyricsFile);
     } else {
-        setStatus("Error en la descarga (código " + QString::number(exitCode) + ")");
-        emit downloadFailed("Proceso terminó con código: " + QString::number(exitCode));
+        QString err = QString::fromUtf8(m_process->readAllStandardError());
+        if (err.trimmed().isEmpty()) err = "Proceso terminó con código: " + QString::number(exitCode);
+        setStatus("Error en la descarga: " + err);
+        emit downloadFailed(err);
     }
 }
 
@@ -264,7 +268,8 @@ void DownloaderBridge::onSearchProcessOutput()
 void DownloaderBridge::onSearchProcessFinished(int exitCode, QProcess::ExitStatus status)
 {
     if (status == QProcess::CrashExit) {
-        emit searchFailed("ERR_CRASH", "El proceso de búsqueda se cerró inesperadamente.");
+        // Ignorar CrashExit ya que normalmente se debe a que matamos el proceso (kill)
+        // para iniciar una nueva búsqueda (ej. debounce o apretar Enter rápido).
         return;
     }
 
@@ -362,13 +367,15 @@ if info_files:
 
     try:
         params = urllib.parse.urlencode({'artist_name': artist, 'track_name': title, 'duration': duration})
-        req = urllib.request.urlopen(f"https://lrclib.net/api/get?{params}", timeout=10)
-        data = json.loads(req.read())
-        if data.get('syncedLyrics'):
-            lrc_path = os.path.join(out_dir, "lyrics.lrc")
-            with open(lrc_path, 'w', encoding='utf-8') as lf:
-                lf.write(data['syncedLyrics'])
-            print(f"[spotdl] Letras guardadas en {lrc_path}", flush=True)
+        url = f"https://lrclib.net/api/get?{params}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'LavaLyrics/1.0 (https://github.com/Uramaag/LavaLyrics)'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read())
+            if data.get('syncedLyrics'):
+                lrc_path = os.path.join(out_dir, "lyrics.lrc")
+                with open(lrc_path, 'w', encoding='utf-8') as lf:
+                    lf.write(data['syncedLyrics'])
+                print(f"[spotdl] Letras guardadas en {lrc_path}", flush=True)
     except Exception as e:
         print(f"[spotdl] No se encontraron letras: {e}", flush=True)
 
