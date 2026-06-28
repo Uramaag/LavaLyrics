@@ -470,168 +470,105 @@ ApplicationWindow {
                         spacing: 4
 
                         delegate: ColumnLayout {
-                        width: searchListView.width
-                        spacing: 2
+                            width: searchListView.width
+                            spacing: 2
 
-                        // Main row
-                        Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 42
-                            color: mouseArea.containsMouse ? window.bgElevated : window.bgCard
-                            radius: 6; border.color: window.borderSubtle; border.width: 1
+                            // Main row
+                            Rectangle {
+                                Layout.fillWidth: true; Layout.preferredHeight: 42
+                                color: rowMouse.containsMouse ? window.bgElevated : window.bgCard
+                                radius: 6; border.color: window.borderSubtle; border.width: 1
 
-                            MouseArea {
-                                id: mouseArea
-                                anchors.fill: parent; hoverEnabled: true
-                                onClicked: {
-                                    if (modelData.type !== "song") {
-                                        modelData.isExpanded = !modelData.isExpanded
-                                        platformSearchDialog.search() // trigger redraw
-                                    }
-                                }
-                                onDoubleClicked: {
-                                    if (modelData.type === "song") {
-                                        downloadProgressDialog.visible = true
-                                        let outDir = projectMgr.workspacePath + "\\media"
-                                        downloader.downloadFromUrl(modelData.url, outDir)
-                                    }
-                                }
-                            }
-
-                            RowLayout {
-                                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
-
-                                // Expand button / Title
-                                RowLayout {
-                                    Layout.fillWidth: true; spacing: 8
-                                    Text {
-                                        text: modelData.type === "album" ? "💿" : (modelData.type === "artist" ? "👤" : "🎵")
-                                        font.pixelSize: 12
-                                    }
-                                    ColumnLayout {
-                                        spacing: 2
-                                        Text {
-                                            text: modelData.title
-                                            color: window.textPrimary; font.bold: true; font.pixelSize: 11
-                                        }
-                                        Text {
-                                            text: modelData.artist ? modelData.artist : (modelData.type === "album" ? "Álbum" : "Artista")
-                                            color: window.textMuted; font.pixelSize: 9
-                                            visible: modelData.artist || modelData.type !== "song"
-                                        }
-                                    }
-                                    
-                                    Button {
-                                        visible: modelData.type === "album" || modelData.type === "artist"
-                                        text: modelData.isExpanded ? "▲ Ocultar canciones" : "▼ Ver canciones"
-                                        implicitHeight: 20
-                                        contentItem: Text { text: parent.text; color: window.lavaPurple; font.pixelSize: 9; font.bold: true }
-                                        background: Item {}
-                                        onClicked: {
+                                MouseArea {
+                                    id: rowMouse
+                                    anchors.fill: parent; hoverEnabled: true
+                                    onClicked: {
+                                        if (modelData.type !== "song") {
                                             modelData.isExpanded = !modelData.isExpanded
-                                            // Force trigger model update
                                             platformSearchDialog.search()
                                         }
                                     }
-                                }
-
-                                // Platform
-                                RowLayout {
-                                    Layout.preferredWidth: 110; spacing: 4
-                                    Text {
-                                        text: modelData.platform === "YouTube" ? "▶" : (modelData.platform === "SoundCloud" ? "☁" : "🎵")
-                                        color: modelData.platform === "YouTube" ? "#ff4040" : (modelData.platform === "SoundCloud" ? "#ff7700" : "#1db954")
-                                        font.pixelSize: 10
-                                    }
-                                    Text {
-                                        text: modelData.platform
-                                        color: window.textSecondary; font.pixelSize: 10
-                                    }
-                                }
-
-                                // Has lyrics
-                                Text {
-                                    text: modelData.type === "song" ? (modelData.hasLyrics ? "✅ Sincronizadas" : "❌ No") : "-"
-                                    color: modelData.hasLyrics ? "#4caf50" : window.textMuted; font.pixelSize: 10
-                                    Layout.preferredWidth: 80; horizontalAlignment: Text.AlignHCenter
-                                }
-
-                                // State
-                                Text {
-                                    text: modelData.type === "song" ? (modelData.isDownloaded ? "📥 Guardada" : "☁ En Nube") : "-"
-                                    color: modelData.isDownloaded ? "#81c784" : window.textMuted; font.pixelSize: 10
-                                    Layout.preferredWidth: 100; horizontalAlignment: Text.AlignHCenter
-                                }
-
-                                // Download Action Button
-                                Button {
-                                    visible: modelData.type === "song"
-                                    text: modelData.isDownloaded ? "Importar" : "Descargar"
-                                    Layout.preferredWidth: 90; implicitHeight: 26
-                                    onClicked: {
-                                        if (modelData.isDownloaded) {
-                                            // Simulate direct load since it is pre-downloaded
-                                            statusBar.showMsg("Importando: " + modelData.title)
-                                            downloader.downloadCompleted("C:/LavaLyricsProjects/samples/" + modelData.title + ".mp3", "")
-                                        } else {
-                                            downloader.downloadSpotify(modelData.url, outDirField.text)
+                                    onDoubleClicked: {
+                                        if (modelData.type === "song") {
+                                            downloadProgressDialog.visible = true
+                                            let outDir = projectMgr.workspacePath + "\\media"
+                                            downloader.downloadFromUrl(modelData.url, outDir)
                                         }
-                                        platformSearchDialog.close()
                                     }
-                                    contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                    background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 4 }
                                 }
-                            }
-                        }
 
-                        // Child tracks list for artist/album
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: 24
-                            visible: (modelData.type === "album" || modelData.type === "artist") && modelData.isExpanded
-                            spacing: 2
-
-                            Repeater {
-                                model: modelData.tracks
-                                Rectangle {
-                                    Layout.fillWidth: true; height: 36
-                                    color: window.bgDark; radius: 4; border.color: window.borderSubtle; border.width: 1
+                                RowLayout {
+                                    anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
 
                                     RowLayout {
-                                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                                        Layout.fillWidth: true; spacing: 8
                                         Text {
-                                            text: "↳  " + modelData.title
-                                            color: window.textSecondary; font.pixelSize: 10; Layout.fillWidth: true
+                                            text: modelData.type === "album" ? "💿" : (modelData.type === "artist" ? "👤" : "🎵")
+                                            font.pixelSize: 12
                                         }
-                                        Text {
-                                            text: modelData.hasLyrics ? "✅ Sincronizadas" : "❌ No"
-                                            color: modelData.hasLyrics ? "#4caf50" : window.textMuted; font.pixelSize: 9
-                                            Layout.preferredWidth: 80; horizontalAlignment: Text.AlignHCenter
-                                        }
-                                        Text {
-                                            text: modelData.isDownloaded ? "📥 Guardada" : "☁ En Nube"
-                                            color: modelData.isDownloaded ? "#81c784" : window.textMuted; font.pixelSize: 9
-                                            Layout.preferredWidth: 100; horizontalAlignment: Text.AlignHCenter
-                                        }
-                                        Button {
-                                            text: modelData.isDownloaded ? "Importar" : "Descargar"
-                                            Layout.preferredWidth: 80; implicitHeight: 22
-                                            onClicked: {
-                                                if (modelData.isDownloaded) {
-                                                    downloader.downloadCompleted("C:/LavaLyricsProjects/samples/" + modelData.title + ".mp3", "")
-                                                } else {
-                                                    downloader.downloadSpotify(modelData.url, outDirField.text)
-                                                }
-                                                platformSearchDialog.close()
+                                        ColumnLayout {
+                                            spacing: 2
+                                            Text {
+                                                text: modelData.title
+                                                color: window.textPrimary; font.bold: true; font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                                Layout.maximumWidth: 200
                                             }
-                                            contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 9; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                            background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 4 }
+                                            Text {
+                                                text: modelData.artist ? modelData.artist : (modelData.type === "album" ? "Álbum" : "Artista")
+                                                color: window.textMuted; font.pixelSize: 9
+                                                visible: modelData.artist || modelData.type !== "song"
+                                            }
                                         }
+                                    }
+
+                                    // Platform with icon
+                                    RowLayout {
+                                        Layout.preferredWidth: 110; spacing: 4
+                                        Text {
+                                            text: modelData.platform === "YouTube" ? "▶" : (modelData.platform === "SoundCloud" ? "☁" : "🎵")
+                                            color: modelData.platform === "YouTube" ? "#ff4040" : (modelData.platform === "SoundCloud" ? "#ff7700" : "#1db954")
+                                            font.pixelSize: 10
+                                        }
+                                        Text {
+                                            text: modelData.platform
+                                            color: window.textSecondary; font.pixelSize: 10
+                                        }
+                                    }
+
+                                    // Has lyrics
+                                    Text {
+                                        text: modelData.type === "song" ? (modelData.hasLyrics ? "✅ Sí" : "❌ No") : "-"
+                                        color: modelData.hasLyrics ? "#4caf50" : window.textMuted; font.pixelSize: 10
+                                        Layout.preferredWidth: 80; horizontalAlignment: Text.AlignHCenter
+                                    }
+
+                                    // State
+                                    Text {
+                                        text: modelData.type === "song" ? (modelData.isDownloaded ? "📥 Local" : "☁ Nube") : "-"
+                                        color: modelData.isDownloaded ? "#81c784" : window.textMuted; font.pixelSize: 10
+                                        Layout.preferredWidth: 90; horizontalAlignment: Text.AlignHCenter
+                                    }
+
+                                    // Download Button
+                                    Button {
+                                        visible: modelData.type === "song"
+                                        text: modelData.isDownloaded ? "Importar" : "Descargar"
+                                        Layout.preferredWidth: 90; implicitHeight: 26
+                                        onClicked: {
+                                            downloadProgressDialog.visible = true
+                                            let outDir = projectMgr.workspacePath + "\\media"
+                                            downloader.downloadFromUrl(modelData.url, outDir)
+                                            platformSearchDialog.close()
+                                        }
+                                        contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                        background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 4 }
                                     }
                                 }
                             }
-                        }
-                    }
-                }
+                        } // delegate
+                    } // ListView
+                } // ScrollView
 
                 // Empty state
                 ColumnLayout {
@@ -646,8 +583,7 @@ ApplicationWindow {
                     Text {
                         text: searchField.text.length > 0 ? "No se encontraron canciones" : "Busca una canción o artista"
                         color: window.textSecondary
-                        font.pixelSize: 14
-                        font.bold: true
+                        font.pixelSize: 14; font.bold: true
                         Layout.alignment: Qt.AlignHCenter
                     }
                     Text {
@@ -657,7 +593,7 @@ ApplicationWindow {
                         Layout.alignment: Qt.AlignHCenter
                     }
                 }
-            }
+            } // Close Item
 
             // Close button
             Button {
