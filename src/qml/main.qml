@@ -2,18 +2,27 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import Qt.labs.settings 1.0
 import LavaLyrics 1.0
 
 ApplicationWindow {
     id: window
     visible: true
-    width: 1400
-    height: 860
     minimumWidth: 1100
     minimumHeight: 700
     title: projectMgr.isDirty
            ? "● LavaLyrics C++ — " + projectMgr.projectName
            : "LavaLyrics C++ — " + projectMgr.projectName
+
+    // Persistencia de la geometría y estado de la ventana
+    Settings {
+        category: "Window"
+        property alias x: window.x
+        property alias y: window.y
+        property alias width: window.width
+        property alias height: window.height
+        property alias visibility: window.visibility
+    }
 
     // ── C++ Backend objects ────────────────────────────────────────────────
     TimelineController { id: timeline }
@@ -41,9 +50,72 @@ ApplicationWindow {
     property int    currentScreen: 0   // 0=home, 1=download, 2=editor
     property double zoomLevel:     1.0
     property double timelineScale: 80  // px per second
-    QtObject {
-        id: outDirField
-        property string text: "C:/Users/" + Qt.platform.os + "/Documents/LavaLyricsProjects/ACALOSPROJECTOS"
+    property string selectedClipId: ""
+    property string selectedClipTrack: ""
+    property var selectedClip: selectedClipId !== "" ? timeline.getClip(selectedClipId) : ({})
+    property string libraryViewMode: "cards"
+    property string toastMessage: ""
+    property string toastType: "info"
+    property string lastDownloadKey: ""
+    property bool   showGuides: true
+    property string savingStatus: "idle" // "idle", "saving", "saved"
+
+    function basename(path) {
+        return String(path || "").split("/").pop().split("\\").pop()
+    }
+
+    function isAudioPath(path) {
+        let p = String(path || "").toLowerCase()
+        return p.endsWith(".mp3") || p.endsWith(".m4a") || p.endsWith(".flac") || p.endsWith(".wav") || p.endsWith(".opus")
+    }
+
+    function importMediaToLibrary(path) {
+        if (!path) return
+        let name = basename(path)
+        if (isAudioPath(path)) {
+            mediaEngine.loadMedia(path)
+            timeline.addMediaClip("A1", "audio", name, path, 0, Math.max(15, mediaEngine.duration || 15), 0)
+        } else {
+            timeline.addMediaClip("V1", "video", name, path, 0, 15, 0)
+            mediaEngine.loadMedia(path)
+        }
+        let pData = projectMgr.getProjectData()
+        pData["timelineVideo"] = timeline.getVideoClips()
+        pData["timelineAudio"] = timeline.getAudioClips()
+        projectMgr.setProjectData(pData)
+        projectMgr.markDirty()
+        currentScreen = 2
+    }
+
+    function firstAudioPath() {
+        let clips = timeline.getAudioClips()
+        return clips.length > 0 ? clips[0].path : mediaEngine.mediaPath
+    }
+
+    function showToast(message, type) {
+        toastMessage = String(message || "")
+        toastType = type || "info"
+        toastTimer.restart()
+    }
+
+    function hasDownloadedSong(query) {
+        let q = String(query || "").toLowerCase()
+        let clips = timeline.getAudioClips()
+        for (let i = 0; i < clips.length; i++) {
+            let name = String(clips[i].name || clips[i].path || "").toLowerCase()
+            if (q !== "" && name.indexOf(q) >= 0) return true
+        }
+        return false
+    }
+
+    function songArtist(query) {
+        let parts = String(query || "").split(" - ")
+        return parts.length > 1 ? parts[0].trim() : "Artista por detectar"
+    }
+
+    function songTitle(query) {
+        let parts = String(query || "").split(" - ")
+        return parts.length > 1 ? parts.slice(1).join(" - ").trim() : String(query || "").trim()
     }
 
     background: Rectangle { color: window.bgDeep }
@@ -63,25 +135,41 @@ ApplicationWindow {
         target: downloader
         function onDownloadCompleted(audioPath, lyricsPath) {
             statusBar.showMsg("✅ Descarga completada")
+            showToast("Descarga completada: " + basename(audioPath) + (lyricsPath !== "" ? "\nLyrics sincronizadas importadas." : "\nSin lyrics sincronizadas."), "success")
             if (audioPath !== "") mediaEngine.loadMedia(audioPath)
             if (lyricsPath !== "") {
                 if (lyricsPath.endsWith(".lrc"))  lyricsLoader.loadLrc(lyricsPath)
                 if (lyricsPath.endsWith(".json")) lyricsLoader.loadJson(lyricsPath)
             }
+            if (audioPath !== "") {
+                timeline.addSongClips(basename(audioPath), audioPath, lyricsPath, 0, Math.max(15, mediaEngine.duration || 180), lyricsLoader.getAllLines())
+                projectMgr.markDirty()
+            }
             currentScreen = 2
         }
         function onDownloadFailed(error) {
             statusBar.showMsg("❌ Error: " + error)
-            toastErrorBox.triggerError("Error de Descarga: " + error)
+            showToast("No se pudo descargar la canción.\n" + error, "error")
+        }
+        function onSearchStarted() {
+            songSearchModal.results = [
+                {title: "Buscando en internet...", artist: "Consultando YouTube y LRCLIB", source: "Busqueda real", icon: "...", hasLyrics: false, downloaded: false, duration: "Espere", url: ""}
+            ]
         }
         function onSearchCompleted(results) {
-            platformSearchDialog.isLoading = false
-            platformSearchDialog.rawResults = results
-            platformSearchDialog.search()
+            for (let i = 0; i < results.length; i++) {
+                results[i].downloaded = hasDownloadedSong(results[i].title) || hasDownloadedSong(results[i].artist + " - " + results[i].title)
+                if (!results[i].duration || results[i].duration === "") results[i].duration = "No disponible"
+                if (!results[i].icon || results[i].icon === "") results[i].icon = "YT"
+            }
+            songSearchModal.results = results
+            if (results.length === 0) {
+                showToast("No se encontraron canciones reales para esa busqueda.", "info")
+            }
         }
-        function onSearchFailed(error, details) {
-            platformSearchDialog.isLoading = false
-            toastErrorBox.triggerError("Buscador: [Código " + error + "] " + details)
+        function onSearchFailed(error) {
+            songSearchModal.results = []
+            showToast("No se pudo buscar canciones.\n" + error, "error")
         }
     }
 
@@ -93,49 +181,31 @@ ApplicationWindow {
         }
         function onExportFailed(error) {
             statusBar.showMsg("❌ Exportación fallida: " + error)
-            toastErrorBox.triggerError(error)
         }
     }
 
     Connections {
         target: projectMgr
         function onProjectLoaded(data) {
-            statusBar.showMsg("📂 Proyecto cargado: " + projectMgr.projectName)
-            
-            // Re-load tracks if any
-            if (data.mediaPath && data.mediaPath !== "") {
-                mediaEngine.loadMedia(data.mediaPath)
+            if (data.audioPath && data.audioPath !== "") {
+                mediaEngine.loadMedia(data.audioPath)
             }
             if (data.lyricsPath && data.lyricsPath !== "") {
                 if (data.lyricsPath.endsWith(".lrc")) lyricsLoader.loadLrc(data.lyricsPath)
                 else lyricsLoader.loadJson(data.lyricsPath)
             }
-            
-            currentScreen = 2 // Go to Editor
-        }
-        function onErrorOccurred(message) {
-            statusBar.showMsg("❌ Error del Proyecto: " + message)
-            toastErrorBox.triggerError(message)
+            currentScreen = 2
         }
     }
 
     // ── File dialogs ───────────────────────────────────────────────────────
     FileDialog {
-        id: loadProjectDialog
-        title: "Abrir Proyecto LavaLyrics"
-        fileMode: FileDialog.OpenFile
-        nameFilters: ["LavaLyrics Projects (*.lavalyrics *.llproj)"]
-        onAccepted: {
-            projectMgr.loadProject(selectedFile.toString().replace("file:///", ""))
-        }
-    }
-
-    FileDialog {
         id: openMediaDialog
         title: "Abrir archivo de audio/video"
         nameFilters: ["Archivos de audio/video (*.mp3 *.m4a *.flac *.wav *.mp4 *.mov *.mkv)", "Todos (*)"]
         onAccepted: {
-            mediaEngine.loadMedia(selectedFile.toString().replace("file:///", ""))
+            let path = selectedFile.toString().replace("file:///", "")
+            importMediaToLibrary(path)
         }
     }
 
@@ -147,6 +217,21 @@ ApplicationWindow {
             let p = selectedFile.toString().replace("file:///", "")
             if (p.endsWith(".lrc"))  lyricsLoader.loadLrc(p)
             else                     lyricsLoader.loadJson(p)
+            let pData = projectMgr.getProjectData()
+            pData["lyricsPath"] = p
+            projectMgr.setProjectData(pData)
+            projectMgr.markDirty()
+        }
+    }
+
+    FileDialog {
+        id: openProjectDialog
+        title: "Abrir proyecto LavaLyrics"
+        nameFilters: ["LavaLyrics Project (*.llproj)", "Todos (*)"]
+        onAccepted: {
+            let path = selectedFile.toString().replace("file:///", "")
+            projectMgr.loadProject(path)
+            currentScreen = 2 // Ir al editor
         }
     }
 
@@ -160,6 +245,311 @@ ApplicationWindow {
         }
     }
 
+    FolderDialog {
+        id: newProjectFolderDialog
+        title: "Selecciona la carpeta para tu proyecto"
+        currentFolder: "file:///C:/Users/urama/OneDrive/Documents/LavaLyricsProjects"
+        onAccepted: {
+            txtProjectLocation.text = selectedFolder.toString().replace("file:///", "")
+        }
+    }
+
+    Window {
+        id: songSearchModal
+        visible: false
+        width: 620; height: 520
+        title: "Añadir canción"
+        flags: Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint
+        modality: Qt.ApplicationModal
+        color: window.bgDark
+
+        property string query: ""
+        property var results: []
+
+        function startDownload(result) {
+            let target = result.url || songSearchField.text.trim()
+            if (target === "") return
+            window.lastDownloadKey = (result.title || target).toLowerCase()
+            window.showToast("Iniciando descarga desde " + result.source + "...\n" + (result.artist || "") + " - " + (result.title || target), "info")
+            try {
+                downloader.downloadFromUrl(target, outDirField.text.trim())
+                songSearchModal.visible = false
+            } catch (err) {
+                window.showToast("Error al iniciar la descarga.\n" + err, "error")
+            }
+        }
+
+        Timer {
+            id: songSearchDebounce
+            interval: 450
+            repeat: false
+            onTriggered: {
+                let q = songSearchField.text.trim()
+                songSearchModal.query = q
+                if (q === "") {
+                    songSearchModal.results = []
+                } else {
+                    songSearchModal.results = []
+                    downloader.searchSongs(q)
+                }
+            }
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 18
+            spacing: 12
+
+            Text { text: "Buscar cancion"; color: window.textPrimary; font.pixelSize: 18; font.bold: true }
+            Text { text: "Busca por artista, cancion o pega una URL. Se priorizan resultados con lyrics sincronizadas."; color: window.textSecondary; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+
+            TextField {
+                id: songSearchField
+                Layout.fillWidth: true
+                placeholderText: "Ej. Bad Bunny Monaco, Spotify URL, YouTube Music..."
+                color: window.textPrimary
+                background: Rectangle { color: window.bgCard; border.color: parent.activeFocus ? window.lavaRed : window.borderSubtle; radius: 6 }
+                onTextChanged: songSearchDebounce.restart()
+                onAccepted: {
+                    songSearchModal.startDownload({source: "busqueda"})
+                    songSearchModal.visible = false
+                }
+            }
+
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                ColumnLayout {
+                    width: songSearchModal.width - 50
+                    spacing: 8
+                    Repeater {
+                        model: songSearchModal.results
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 104
+                            color: window.bgCard
+                            border.color: modelData.hasLyrics ? "#4caf50" : window.borderSubtle
+                            radius: 6
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 10
+                                Rectangle {
+                                    width: 54; height: 54
+                                    color: "#161a22"
+                                    border.color: window.borderSubtle
+                                    radius: 5
+                                    Column {
+                                        anchors.centerIn: parent
+                                        spacing: 3
+                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.icon; color: "#fff"; font.pixelSize: 11; font.bold: true }
+                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Fuente"; color: window.textMuted; font.pixelSize: 7 }
+                                    }
+                                }
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 5
+                                    Text { text: modelData.title; color: window.textPrimary; font.bold: true; font.pixelSize: 13; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    Text { text: "Artista: " + modelData.artist; color: window.textSecondary; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    Text { text: "Plataforma: " + modelData.source + "    Duracion: " + modelData.duration; color: window.textMuted; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    Text { text: modelData.artist + " · " + modelData.source; color: window.textMuted; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    RowLayout {
+                                        spacing: 6
+                                        Rectangle {
+                                            height: 20; width: lyricBadgeText.implicitWidth + 14; radius: 4
+                                            color: modelData.hasLyrics ? "#143d25" : "#3b3030"
+                                            border.color: modelData.hasLyrics ? "#4caf50" : "#8a6a6a"
+                                            Text { id: lyricBadgeText; anchors.centerIn: parent; text: modelData.hasLyrics ? "Lyrics sincronizadas" : "Sin lyrics"; color: "#fff"; font.pixelSize: 9; font.bold: true }
+                                        }
+                                        Rectangle {
+                                            height: 20; width: downloadBadgeText.implicitWidth + 14; radius: 4
+                                            color: modelData.downloaded ? "#253f61" : "#3a3420"
+                                            border.color: modelData.downloaded ? "#6aa7ff" : "#c9a64b"
+                                            Text { id: downloadBadgeText; anchors.centerIn: parent; text: modelData.downloaded ? "Descargado" : "Pendiente"; color: "#fff"; font.pixelSize: 9; font.bold: true }
+                                        }
+                                    }
+                                }
+                                Button {
+                                    text: modelData.downloaded ? "Insertar" : "Descargar"
+                                    enabled: modelData.url !== ""
+                                    onClicked: {
+                                        if (modelData.downloaded) {
+                                            showToast("La cancion ya aparece como descargada en la timeline.", "info")
+                                            songSearchModal.visible = false
+                                        } else {
+                                            songSearchModal.startDownload(modelData)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal para Nuevo Proyecto estilo Adobe Premiere
+    Window {
+        id: newProjectModal
+        visible: false
+        width: 600; height: 380
+        title: "Crear Proyecto — LavaLyrics"
+        flags: Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint
+        color: window.bgDark
+        modality: Qt.ApplicationModal
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 24
+
+            // Columna Izquierda: Formulario
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 14
+
+                Text {
+                    text: "✨ Crear nuevo proyecto"
+                    font.pixelSize: 18; font.bold: true; color: window.textPrimary
+                }
+
+                // Nombre
+                ColumnLayout {
+                    spacing: 4
+                    Layout.fillWidth: true
+                    Text { text: "Nombre del proyecto"; font.pixelSize: 11; color: window.textSecondary }
+                    TextField {
+                        id: txtProjectName
+                        Layout.fillWidth: true
+                        text: "Mi Clip de Tiktok"
+                        color: window.textPrimary
+                        background: Rectangle { color: window.bgCard; border.color: parent.activeFocus ? window.lavaRed : window.borderSubtle; border.width: 1; radius: 6 }
+                        font.pixelSize: 12
+                        selectByMouse: true
+                    }
+                }
+
+                // Relación de aspecto
+                ColumnLayout {
+                    spacing: 4
+                    Layout.fillWidth: true
+                    Text { text: "Relación de aspecto / Resolución"; font.pixelSize: 11; color: window.textSecondary }
+                    ComboBox {
+                        id: comboResolution
+                        Layout.fillWidth: true
+                        model: ["Vertical 9:16 (1080x1920)", "Horizontal 16:9 (1920x1080)"]
+                        font.pixelSize: 12
+                    }
+                }
+
+                // Ubicación (Examinar)
+                ColumnLayout {
+                    spacing: 4
+                    Layout.fillWidth: true
+                    Text { text: "Ubicación del proyecto"; font.pixelSize: 11; color: window.textSecondary }
+                    RowLayout {
+                        spacing: 8
+                        TextField {
+                            id: txtProjectLocation
+                            Layout.fillWidth: true
+                            text: "C:/Users/urama/OneDrive/Documents/LavaLyricsProjects"
+                            color: window.textPrimary
+                            background: Rectangle { color: window.bgCard; border.color: parent.activeFocus ? window.lavaRed : window.borderSubtle; border.width: 1; radius: 6 }
+                            font.pixelSize: 11
+                            selectByMouse: true
+                        }
+                        Button {
+                            text: "📂 Examinar"
+                            implicitHeight: 34
+                            onClicked: newProjectFolderDialog.open()
+                            contentItem: Text { text: parent.text; color: window.textPrimary; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { color: parent.hovered ? window.bgElevated : window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 6 }
+                        }
+                    }
+                }
+
+                Item { Layout.fillHeight: true }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight
+                    spacing: 12
+
+                    Button {
+                        text: "Cancelar"
+                        onClicked: newProjectModal.visible = false
+                        contentItem: Text { text: parent.text; color: window.textSecondary; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1; radius: 6 }
+                        implicitWidth: 90; implicitHeight: 34
+                    }
+
+                    Button {
+                        text: "Crear"
+                        onClicked: {
+                            let res = comboResolution.currentText.indexOf("Vertical") >= 0 ? "1080x1920" : "1920x1080"
+                            projectMgr.newProject(txtProjectName.text, txtProjectLocation.text, res)
+                            newProjectModal.visible = false
+                            currentScreen = 2 // Ir al editor
+                        }
+                        contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 6 }
+                        implicitWidth: 90; implicitHeight: 34
+                    }
+                }
+            }
+
+            // Columna Derecha: Mockup Visual de Relación de Aspecto
+            ColumnLayout {
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 10
+                Layout.preferredWidth: 160
+
+                Text {
+                    text: "Previsualización"
+                    font.pixelSize: 11; font.bold: true
+                    color: window.textMuted
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                // Rectángulo dinámico
+                Rectangle {
+                    id: previewMockup
+                    Layout.alignment: Qt.AlignHCenter
+                    width: comboResolution.currentIndex === 0 ? 100 : 160
+                    height: comboResolution.currentIndex === 0 ? 160 : 100
+                    color: window.bgCard
+                    border.color: window.lavaRed
+                    border.width: 2
+                    radius: 8
+
+                    Behavior on width { NumberAnimation { duration: 250 } }
+                    Behavior on height { NumberAnimation { duration: 250 } }
+
+                    // Icono de video adentro
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 6
+                        Text {
+                            text: comboResolution.currentIndex === 0 ? "📱" : "💻"
+                            font.pixelSize: 24
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        Text {
+                            text: comboResolution.currentIndex === 0 ? "9:16\nVertical" : "16:9\nHorizontal"
+                            font.pixelSize: 10
+                            font.bold: true
+                            color: window.textSecondary
+                            horizontalAlignment: Text.AlignHCenter
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     FileDialog {
         id: exportFileDialog
         title: "Exportar video"
@@ -168,11 +558,11 @@ ApplicationWindow {
         onAccepted: {
             let path = selectedFile.toString().replace("file:///", "")
             exporter.startExport(path,
-                {"resolution": "1080x1920", "fps": 30, "bitrate": "6000k", "format": "mp4"},
+                {"resolution": comboResolution.currentText.indexOf("Vertical") >= 0 ? "1080x1920" : "1920x1080", "fps": 30, "bitrate": "9000k", "format": "mp4", "duration": Math.max(15, mediaEngine.duration || 15)},
                 {
-                    "audioPath":  mediaEngine.mediaPath,
+                    "audioPath":  firstAudioPath(),
                     "lyricsData": lyricsLoader.getAllLines(),
-                    "videoClips": timeline.getClips("video")
+                    "videoClips": timeline.getVideoClips()
                 }
             )
             exportDialog.visible = true
@@ -237,507 +627,6 @@ ApplicationWindow {
         }
     }
 
-    // ── Download progress dialog ───────────────────────────────────────────
-    Window {
-        id: downloadProgressDialog
-        visible: downloader.isDownloading
-        width: 440; height: 260
-        title: "Descargando música..."
-        flags: Qt.Dialog | Qt.WindowTitleHint
-        color: window.bgDark
-        modality: Qt.ApplicationModal
-
-        ColumnLayout {
-            anchors.centerIn: parent
-            width: parent.width - 48
-            spacing: 20
-
-            Text {
-                text: "📥 Descargando audio y letras"
-                font.pixelSize: 18; font.bold: true
-                color: window.textPrimary
-                Layout.alignment: Qt.AlignHCenter
-            }
-            Text {
-                text: downloader.statusMessage
-                font.pixelSize: 13; color: window.textSecondary
-                Layout.alignment: Qt.AlignHCenter
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-            }
-            Rectangle {
-                Layout.fillWidth: true; height: 8
-                color: window.bgElevated; radius: 4
-                Rectangle {
-                    width: parent.width * downloader.progress / 100
-                    height: parent.height; radius: 4
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0; color: window.lavaRed }
-                        GradientStop { position: 1; color: window.lavaOrange }
-                    }
-                    Behavior on width { NumberAnimation { duration: 300 } }
-                }
-            }
-            Text {
-                text: downloader.progress + "%"
-                font.pixelSize: 24; font.bold: true; color: window.lavaRed
-                Layout.alignment: Qt.AlignHCenter
-            }
-            Button {
-                text: "Cancelar"
-                Layout.alignment: Qt.AlignHCenter
-                onClicked: { downloader.cancel(); downloadProgressDialog.visible = false }
-                contentItem: Text { text: parent.text; color: window.textSecondary; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1; radius: 6 }
-            }
-        }
-    }
-
-    // ── Platform Audio & Lyrics Search Dialog Modal ─────────────────────────
-    Window {
-        id: platformSearchDialog
-        visible: false
-        width: 800; height: 580
-        title: "Buscar Música en Plataformas"
-        flags: Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint
-        color: window.bgDark
-        modality: Qt.ApplicationModal
-
-        property string searchQuery: ""
-        property bool filterOnlySynced: false
-        property var rawResults: []
-
-        property var filteredResults: []
-        property bool isLoading: false
-
-        function performBackendSearch() {
-            let q = searchField.text.trim()
-            if (q.length > 0) {
-                isLoading = true
-                downloader.searchOnline(q)
-            } else {
-                rawResults = []
-                search()
-            }
-        }
-
-        function search() {
-            let query = searchField.text.trim().toLowerCase()
-            let res = []
-            for (let i = 0; i < rawResults.length; i++) {
-                let item = rawResults[i]
-                if (query === "" || item.title.toLowerCase().indexOf(query) !== -1 || (item.artist && item.artist.toLowerCase().indexOf(query) !== -1)) {
-                    if (item.type === "song") {
-                        if (filterOnlySynced && !item.hasLyrics) continue
-                        res.push(item)
-                    } else if (item.tracks) {
-                        let childTracks = []
-                        for (let j = 0; j < item.tracks.length; j++) {
-                            let track = item.tracks[j]
-                            if (filterOnlySynced && !track.hasLyrics) continue
-                            childTracks.push(track)
-                        }
-                        if (childTracks.length > 0) {
-                            res.push({
-                                type: item.type,
-                                title: item.title,
-                                artist: item.artist,
-                                platform: item.platform,
-                                isExpanded: item.isExpanded,
-                                tracks: childTracks
-                            })
-                        }
-                    }
-                }
-            }
-            filteredResults = res
-        }
-
-        Component.onCompleted: search()
-
-        ColumnLayout {
-            anchors.fill: parent; anchors.margins: 20; spacing: 14
-
-            Text {
-                text: "🔍 Buscador de Música Multiplataforma"
-                font.pixelSize: 18; font.bold: true; color: window.textPrimary
-            }
-
-            Text {
-                text: "Busca canciones en Spotify, SoundCloud, YouTube Music o Musixmatch e impórtalas con un click."
-                font.pixelSize: 11; color: window.textSecondary
-            }
-
-            // Search input field + options
-            RowLayout {
-                Layout.fillWidth: true; spacing: 10
-
-                Rectangle {
-                    Layout.fillWidth: true; height: 38
-                    color: window.bgCard; border.color: searchField.activeFocus ? window.lavaRed : window.borderSubtle
-                    border.width: 1; radius: 6
-
-                    RowLayout {
-                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                        TextField {
-                            id: searchField
-                            Layout.fillWidth: true; background: Item {}
-                            placeholderText: "Nombre de canción, artista o álbum..."
-                            color: window.textPrimary; placeholderTextColor: window.textMuted
-                            font.pixelSize: 12
-                            onTextChanged: debounceTimer.restart()
-                            onAccepted: platformSearchDialog.performBackendSearch()
-                        }
-                        Button {
-                            text: "✕"
-                            implicitWidth: 24; implicitHeight: 24
-                            onClicked: { searchField.text = ""; platformSearchDialog.performBackendSearch() }
-                            contentItem: Text { text: parent.text; color: window.textMuted; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            background: Item {}
-                        }
-                    }
-                }
-
-                Button {
-                    id: searchBtn
-                    implicitWidth: 100; implicitHeight: 38
-                    onClicked: platformSearchDialog.performBackendSearch()
-                    
-                    contentItem: RowLayout {
-                        spacing: 6; anchors.centerIn: parent
-                        BusyIndicator {
-                            running: platformSearchDialog.isLoading
-                            visible: platformSearchDialog.isLoading
-                            Layout.preferredWidth: 20; Layout.preferredHeight: 20
-                        }
-                        Text { 
-                            text: platformSearchDialog.isLoading ? "Buscando..." : "Buscar 🚀"
-                            color: "#fff"; font.bold: true; font.pixelSize: 11
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                    }
-                    background: Rectangle { color: searchBtn.hovered ? "#ff5252" : window.lavaRed; radius: 6 }
-                }
-            }
-
-            Timer {
-                id: debounceTimer
-                interval: 1000
-                repeat: false
-                onTriggered: platformSearchDialog.performBackendSearch()
-            }
-
-            // Filter checkbox row
-            RowLayout {
-                Layout.fillWidth: true; spacing: 12
-                CheckBox {
-                    id: syncedLyricsFilter
-                    text: "Solo letras sincronizadas"
-                    checked: platformSearchDialog.filterOnlySynced
-                    onCheckedChanged: {
-                        platformSearchDialog.filterOnlySynced = checked
-                        platformSearchDialog.search()
-                    }
-                    contentItem: Text { text: syncedLyricsFilter.text; color: window.textSecondary; font.pixelSize: 11; anchors.left: syncedLyricsFilter.indicator.right; anchors.leftMargin: 6; anchors.verticalCenter: syncedLyricsFilter.indicator.verticalCenter }
-                }
-            }
-
-            // Results view header
-            Rectangle {
-                Layout.fillWidth: true; height: 26; color: window.bgDark; border.color: window.borderSubtle; border.width: 1; radius: 4
-                RowLayout {
-                    anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
-                    Text { text: "Nombre / Título"; color: window.textMuted; font.pixelSize: 10; Layout.fillWidth: true }
-                    Text { text: "Plataforma"; color: window.textMuted; font.pixelSize: 10; Layout.preferredWidth: 110 }
-                    Text { text: "Letras"; color: window.textMuted; font.pixelSize: 10; Layout.preferredWidth: 80; horizontalAlignment: Text.AlignHCenter }
-                    Text { text: "Estado"; color: window.textMuted; font.pixelSize: 10; Layout.preferredWidth: 100; horizontalAlignment: Text.AlignHCenter }
-                    Text { text: "Acción"; color: window.textMuted; font.pixelSize: 10; Layout.preferredWidth: 90; horizontalAlignment: Text.AlignRight }
-                }
-            }
-
-            // Results List
-            Item {
-                Layout.fillWidth: true; Layout.fillHeight: true
-
-                ScrollView {
-                    anchors.fill: parent; clip: true
-                    ListView {
-                        id: searchListView
-                        anchors.fill: parent
-                        model: platformSearchDialog.filteredResults
-                        spacing: 4
-
-                        delegate: ColumnLayout {
-                            width: searchListView.width
-                            spacing: 2
-
-                            // Main row
-                            Rectangle {
-                                Layout.fillWidth: true; Layout.preferredHeight: 42
-                                color: rowMouse.containsMouse ? window.bgElevated : window.bgCard
-                                radius: 6; border.color: window.borderSubtle; border.width: 1
-
-                                MouseArea {
-                                    id: rowMouse
-                                    anchors.fill: parent; hoverEnabled: true
-                                    onClicked: {
-                                        if (modelData.type !== "song") {
-                                            modelData.isExpanded = !modelData.isExpanded
-                                            platformSearchDialog.search()
-                                        }
-                                    }
-                                    onDoubleClicked: {
-                                        if (modelData.type === "song") {
-                                            downloadProgressDialog.visible = true
-                                            let outDir = projectMgr.workspacePath + "\\media"
-                                            downloader.downloadFromUrl(modelData.url, outDir)
-                                        }
-                                    }
-                                }
-
-                                RowLayout {
-                                    anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
-
-                                    RowLayout {
-                                        Layout.fillWidth: true; spacing: 8
-                                        Text {
-                                            text: modelData.type === "album" ? "💿" : (modelData.type === "artist" ? "👤" : "🎵")
-                                            font.pixelSize: 12
-                                        }
-                                        ColumnLayout {
-                                            spacing: 2
-                                            Text {
-                                                text: modelData.title
-                                                color: window.textPrimary; font.bold: true; font.pixelSize: 11
-                                                elide: Text.ElideRight
-                                                Layout.maximumWidth: 200
-                                            }
-                                            Text {
-                                                text: modelData.artist ? modelData.artist : (modelData.type === "album" ? "Álbum" : "Artista")
-                                                color: window.textMuted; font.pixelSize: 9
-                                                visible: modelData.artist || modelData.type !== "song"
-                                            }
-                                        }
-                                    }
-
-                                    // Platform with icon
-                                    RowLayout {
-                                        Layout.preferredWidth: 110; spacing: 4
-                                        Text {
-                                            text: modelData.platform === "YouTube" ? "▶" : (modelData.platform === "SoundCloud" ? "☁" : "🎵")
-                                            color: modelData.platform === "YouTube" ? "#ff4040" : (modelData.platform === "SoundCloud" ? "#ff7700" : "#1db954")
-                                            font.pixelSize: 10
-                                        }
-                                        Text {
-                                            text: modelData.platform
-                                            color: window.textSecondary; font.pixelSize: 10
-                                        }
-                                    }
-
-                                    // Has lyrics
-                                    Text {
-                                        text: modelData.type === "song" ? (modelData.hasLyrics ? "✅ Sí" : "❌ No") : "-"
-                                        color: modelData.hasLyrics ? "#4caf50" : window.textMuted; font.pixelSize: 10
-                                        Layout.preferredWidth: 80; horizontalAlignment: Text.AlignHCenter
-                                    }
-
-                                    // State
-                                    Text {
-                                        text: modelData.type === "song" ? (modelData.isDownloaded ? "📥 Local" : "☁ Nube") : "-"
-                                        color: modelData.isDownloaded ? "#81c784" : window.textMuted; font.pixelSize: 10
-                                        Layout.preferredWidth: 90; horizontalAlignment: Text.AlignHCenter
-                                    }
-
-                                    // Download Button
-                                    Button {
-                                        visible: modelData.type === "song"
-                                        text: modelData.isDownloaded ? "Importar" : "Descargar"
-                                        Layout.preferredWidth: 90; implicitHeight: 26
-                                        onClicked: {
-                                            downloadProgressDialog.visible = true
-                                            let outDir = projectMgr.workspacePath + "\\media"
-                                            downloader.downloadFromUrl(modelData.url, outDir)
-                                            platformSearchDialog.close()
-                                        }
-                                        contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                        background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 4 }
-                                    }
-                                }
-                            }
-                        } // delegate
-                    } // ListView
-                } // ScrollView
-
-                // Empty state
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    visible: !platformSearchDialog.isLoading && platformSearchDialog.filteredResults.length === 0
-                    spacing: 12
-                    Text {
-                        text: "🔍"
-                        font.pixelSize: 48
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-                    Text {
-                        text: searchField.text.length > 0 ? "No se encontraron canciones" : "Busca una canción o artista"
-                        color: window.textSecondary
-                        font.pixelSize: 14; font.bold: true
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-                    Text {
-                        text: searchField.text.length > 0 ? "Intenta con otros términos o en otra plataforma" : "Los resultados aparecerán aquí"
-                        color: window.textMuted
-                        font.pixelSize: 11
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-                }
-            } // Close Item
-
-            // Close button
-            Button {
-                text: "Cerrar"
-                Layout.alignment: Qt.AlignRight; implicitWidth: 100; implicitHeight: 34
-                onClicked: platformSearchDialog.close()
-                contentItem: Text { text: parent.text; color: window.textSecondary; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1; radius: 6 }
-            }
-        }
-
-        function open() {
-            searchField.text = ""
-            search()
-            visible = true
-        }
-
-        function close() {
-            visible = false
-        }
-    }
-
-    FolderDialog {
-        id: selectWorkspaceDialog
-        title: "Seleccionar Carpeta de Trabajo"
-        currentFolder: "file:///C:/Users/" + Qt.platform.os + "/Documents/LavaLyricsProjects/ACALOSPROJECTOS"
-        onAccepted: {
-            workspaceDirField.text = selectedFolder.toString().replace("file:///", "")
-        }
-    }
-
-    // ── Create New Project Dialog Modal ──────────────────────────────────────
-    Window {
-        id: createProjectDialog
-        visible: false
-        width: 500; height: 350
-        title: "Crear Nuevo Proyecto"
-        flags: Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint
-        color: window.bgDark
-        modality: Qt.ApplicationModal
-
-        ColumnLayout {
-            anchors.fill: parent; anchors.margins: 24
-            spacing: 16
-
-            Text {
-                text: "✨ Crear Nuevo Proyecto"
-                font.pixelSize: 20; font.bold: true; color: window.textPrimary
-            }
-
-            Text {
-                text: "Configura las opciones iniciales para tu video musical."
-                font.pixelSize: 12; color: window.textSecondary
-            }
-
-            // Input: Project Name
-            ColumnLayout {
-                Layout.fillWidth: true; spacing: 4
-                Text { text: "Nombre del Proyecto"; font.pixelSize: 11; font.bold: true; color: window.textSecondary }
-                Rectangle {
-                    Layout.fillWidth: true; height: 40
-                    color: window.bgCard; border.color: nameField.activeFocus ? window.lavaRed : window.borderSubtle
-                    border.width: nameField.activeFocus ? 2 : 1; radius: 6
-                    TextField {
-                        id: nameField
-                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                        placeholderText: "Mi Video Viral"
-                        color: window.textPrimary; background: Item {}
-                        font.pixelSize: 13; placeholderTextColor: window.textMuted
-                    }
-                }
-            }
-
-            // Input: Output Directory
-            ColumnLayout {
-                Layout.fillWidth: true; spacing: 4
-                Text { text: "Carpeta de Trabajo"; font.pixelSize: 11; font.bold: true; color: window.textSecondary }
-                Rectangle {
-                    Layout.fillWidth: true; height: 40
-                    color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 6
-                    RowLayout {
-                        anchors.fill: parent; anchors.margins: 4
-                        TextField {
-                            id: workspaceDirField
-                            Layout.fillWidth: true
-                            text: "C:/Users/" + Qt.platform.os + "/Documents/LavaLyricsProjects/ACALOSPROJECTOS"
-                            color: window.textSecondary; background: Item {}
-                            font.pixelSize: 11; placeholderTextColor: window.textMuted
-                        }
-                        Button {
-                            text: "Examinar..."
-                            implicitWidth: 90
-                            Layout.fillHeight: true
-                            onClicked: selectWorkspaceDialog.open()
-                            contentItem: Text { text: parent.text; color: window.textPrimary; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                            background: Rectangle { color: parent.hovered ? window.bgElevated : window.bgDark; border.color: window.borderSubtle; border.width: 1; radius: 4 }
-                        }
-                    }
-                }
-            }
-
-            Item { Layout.fillHeight: true }
-
-            // Dialog Actions
-            RowLayout {
-                Layout.fillWidth: true; spacing: 12
-                
-                Button {
-                    text: "Cancelar"
-                    Layout.fillWidth: true; implicitHeight: 40
-                    onClicked: createProjectDialog.close()
-                    contentItem: Text { text: parent.text; color: window.textSecondary; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                    background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1; radius: 6 }
-                }
-
-                Button {
-                    text: "Crear Proyecto 🚀"
-                    Layout.fillWidth: true; implicitHeight: 40
-                    enabled: nameField.text.trim() !== ""
-                    onClicked: {
-                        projectMgr.newProject(nameField.text.trim())
-                        outDirField.text = workspaceDirField.text.trim()
-                        createProjectDialog.close()
-                        currentScreen = 2 // Go directly to Editor screen (skipping download screen)
-                    }
-                    contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                    background: Rectangle {
-                        color: parent.enabled ? (parent.hovered ? "#ff5252" : window.lavaRed) : window.bgCard
-                        radius: 6
-                    }
-                }
-            }
-        }
-
-        function open() {
-            nameField.text = ""
-            visible = true
-        }
-
-        function close() {
-            visible = false
-        }
-    }
-
     // ── Root layout ────────────────────────────────────────────────────────
     ColumnLayout {
         anchors.fill: parent
@@ -757,9 +646,67 @@ ApplicationWindow {
 
                 // Logo
                 Row {
-                    spacing: 0
-                    Text { text: "Lava"; font.pixelSize: 20; font.bold: true; color: window.textPrimary; font.family: "Segoe UI" }
-                    Text { text: "Lyrics"; font.pixelSize: 20; font.bold: true; color: window.lavaRed; font.family: "Segoe UI" }
+                    spacing: 8
+                    Layout.alignment: Qt.AlignVCenter
+                    Row {
+                        spacing: 0
+                        Text { text: "Lava"; font.pixelSize: 20; font.bold: true; color: window.textPrimary; font.family: "Segoe UI" }
+                        Text { text: "Lyrics"; font.pixelSize: 20; font.bold: true; color: window.lavaRed; font.family: "Segoe UI" }
+                    }
+                    // Cofre de Minecraft
+                    Text {
+                        id: minecraftChest
+                        text: "🧰"
+                        font.pixelSize: 18
+                        visible: currentScreen === 2
+                        transformOrigin: Item.Center
+                        opacity: window.savingStatus === "idle" ? 0.3 : 1.0
+
+                        Behavior on opacity { NumberAnimation { duration: 300 } }
+
+                        // Animación de rotación/pulso del cofre
+                        RotationAnimation on rotation {
+                            running: window.savingStatus === "saving"
+                            from: 0; to: 360; duration: 1000; loops: Animation.Infinite
+                        }
+
+                        // Glow cuando es saved
+                        SequentialAnimation on scale {
+                            id: saveGlowAnim
+                            running: false
+                            NumberAnimation { to: 1.4; duration: 200; easing.type: Easing.OutBack }
+                            NumberAnimation { to: 1.0; duration: 300; easing.type: Easing.InBack }
+                        }
+
+                        // Escuchar cambios de dirty para simular autoguardado
+                        Connections {
+                            target: projectMgr
+                            function onIsDirtyChanged() {
+                                if (projectMgr.isDirty) {
+                                    window.savingStatus = "saving"
+                                    saveTimer.restart()
+                                }
+                            }
+                        }
+
+                        Timer {
+                            id: saveTimer
+                            interval: 1500
+                            onTriggered: {
+                                window.savingStatus = "saved"
+                                saveGlowAnim.start()
+                                // Autoguardado silencioso
+                                projectMgr.saveProject(projectMgr.projectPath)
+                                idleTimer.start()
+                            }
+                        }
+
+                        Timer {
+                            id: idleTimer
+                            interval: 2000
+                            onTriggered: window.savingStatus = "idle"
+                        }
+                    }
                 }
 
                 // Screen tabs
@@ -767,21 +714,18 @@ ApplicationWindow {
                     spacing: 2
                     Layout.leftMargin: 12
                     Repeater {
-                        model: ["🏠 Inicio", "🎬 Editor"]
+                        model: ["🏠 Inicio", "⬇️ Descargar", "🎬 Editor"]
                         Button {
                             text: modelData
-                            onClicked: {
-                                // Maps 0 -> 0 (Inicio), 1 -> 2 (Editor)
-                                currentScreen = (index === 0) ? 0 : 2
-                            }
+                            onClicked: currentScreen = index
                             contentItem: Text {
-                                text: parent.text; color: currentScreen === (index === 0 ? 0 : 2) ? window.lavaRed : window.textSecondary
-                                font.pixelSize: 12; font.bold: currentScreen === (index === 0 ? 0 : 2)
+                                text: parent.text; color: currentScreen === index ? window.lavaRed : window.textSecondary
+                                font.pixelSize: 12; font.bold: currentScreen === index
                                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                             }
                             background: Rectangle {
-                                color: currentScreen === (index === 0 ? 0 : 2) ? window.bgElevated : "transparent"
-                                border.color: currentScreen === (index === 0 ? 0 : 2) ? window.lavaRed : "transparent"
+                                color: currentScreen === index ? window.bgElevated : "transparent"
+                                border.color: currentScreen === index ? window.lavaRed : "transparent"
                                 border.width: 1; radius: 6
                                 Behavior on color { ColorAnimation { duration: 150 } }
                             }
@@ -840,18 +784,17 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     spacing: 32
 
-                    // Header
                     Column {
                         spacing: 8
                         Layout.alignment: Qt.AlignHCenter
                         Row {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            Text { text: "Lava"; font.pixelSize: 48; font.bold: true; color: window.textPrimary }
-                            Text { text: "Lyrics"; font.pixelSize: 48; font.bold: true; color: window.lavaRed }
+                            Text { text: "Lava"; font.pixelSize: 56; font.bold: true; color: window.textPrimary }
+                            Text { text: "Lyrics"; font.pixelSize: 56; font.bold: true; color: window.lavaRed }
                         }
                         Text {
                             text: "Crea clips musicales virales con letras sincronizadas"
-                            font.pixelSize: 14; color: window.textSecondary
+                            font.pixelSize: 16; color: window.textSecondary
                             anchors.horizontalCenter: parent.horizontalCenter
                         }
                         Text {
@@ -861,158 +804,207 @@ ApplicationWindow {
                         }
                     }
 
-                    // Main Action Area (Nuevo / Abrir Proyecto Cards)
-                    RowLayout {
+                    Row {
+                        spacing: 16
                         Layout.alignment: Qt.AlignHCenter
-                        spacing: 24
 
-                        // Nuevo Proyecto Card
-                        Rectangle {
-                            width: 260; height: 150
-                            color: window.bgCard
-                            border.color: newProjectMouse.containsMouse ? window.lavaRed : window.borderSubtle
-                            border.width: 1; radius: 12
-                            
-                            // Glow effect
+                        // Quick action cards
+                        Repeater {
+                            model: [
+                                {icon: "➕", label: "Nuevo proyecto",     sub: "Comenzar desde cero",    action: 0},
+                                {icon: "⬇️", label: "Descargar canción", sub: "YouTube/Spotify/SoundCloud", action: 1},
+                                {icon: "📂", label: "Abrir audio local",  sub: "MP3, M4A, WAV…",         action: -1},
+                                {icon: "📁", label: "Abrir proyecto",     sub: "Archivo .llproj",        action: -2},
+                            ]
                             Rectangle {
-                                anchors.fill: parent; radius: 12; z: -1
-                                color: "transparent"; border.color: window.lavaRed; border.width: 2
-                                opacity: newProjectMouse.containsMouse ? 0.3 : 0
-                            }
+                                width: 210; height: 140
+                                color: window.bgCard
+                                border.color: cardMouse.containsMouse ? window.lavaRed : window.borderSubtle
+                                border.width: 1; radius: 12
 
-                            MouseArea {
-                                id: newProjectMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: { createProjectDialog.visible = true; createProjectDialog.reset() }
-                            }
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 10
-                                Text {
-                                    text: "➕"
-                                    font.pixelSize: 32
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
-                                Text {
-                                    text: "NUEVO PROYECTO"
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                    color: window.textPrimary
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
-                                Text {
-                                    text: "Comienza una nueva creación"
-                                    font.pixelSize: 10
-                                    color: window.textMuted
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
-                            }
+                                Behavior on border.color { ColorAnimation { duration: 150 } }
 
-                        }
-
-                        // Abrir Proyecto Card
-                        Rectangle {
-                            width: 260; height: 150
-                            color: window.bgCard
-                            border.color: openProjectMouse.containsMouse ? window.lavaPurple : window.borderSubtle
-                            border.width: 1; radius: 12
-                            
-                            // Glow effect
-                            Rectangle {
-                                anchors.fill: parent; radius: 12; z: -1
-                                color: "transparent"; border.color: window.lavaPurple; border.width: 2
-                                opacity: openProjectMouse.containsMouse ? 0.3 : 0
-                            }
-
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 10
-                                Text {
-                                    text: "📂"
-                                    font.pixelSize: 32
-                                    anchors.horizontalCenter: parent.horizontalCenter
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: 10
+                                    Text { text: modelData.icon; font.pixelSize: 32; anchors.horizontalCenter: parent.horizontalCenter }
+                                    Text { text: modelData.label; font.pixelSize: 13; font.bold: true; color: window.textPrimary; anchors.horizontalCenter: parent.horizontalCenter }
+                                    Text { text: modelData.sub; font.pixelSize: 11; color: window.textMuted; anchors.horizontalCenter: parent.horizontalCenter }
                                 }
-                                Text {
-                                    text: "ABRIR PROYECTO"
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                    color: window.textPrimary
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
-                                Text {
-                                    text: "Carga un proyecto existente (.lavalyrics)"
-                                    font.pixelSize: 10
-                                    color: window.textMuted
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
-                            }
 
-                            MouseArea {
-                                id: openProjectMouse
-                                anchors.fill: parent; hoverEnabled: true
-                                onClicked: loadProjectDialog.open()
+                                MouseArea {
+                                    id: cardMouse
+                                    anchors.fill: parent; hoverEnabled: true
+                                    onClicked: {
+                                        if      (modelData.action === 0)  newProjectModal.visible = true
+                                        else if (modelData.action === 1)  currentScreen = 1
+                                        else if (modelData.action === -1) openMediaDialog.open()
+                                        else if (modelData.action === -2) openProjectDialog.open()
+                                    }
+                                }
                             }
                         }
                     }
 
-                    // Table with recent projects
-                    ColumnLayout {
-                        spacing: 10
+                    // Recent projects
+                    Column {
+                        spacing: 8
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: 600
                         visible: projectMgr.recentProjects().length > 0
 
-                        Text {
-                            text: "Proyectos recientes"
-                            color: window.textSecondary; font.pixelSize: 14; font.bold: true
-                            Layout.alignment: Qt.AlignLeft
-                        }
-
-                        // Recent projects table header
-                        Rectangle {
-                            Layout.fillWidth: true; height: 30
-                            color: window.bgDark
-                            border.color: window.borderSubtle; border.width: 1
-                            radius: 6
-
-                            RowLayout {
-                                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
-                                Text { text: "Nombre de Proyecto"; color: window.textMuted; font.pixelSize: 11; Layout.fillWidth: true }
-                                Text { text: "Ubicación"; color: window.textMuted; font.pixelSize: 11; Layout.preferredWidth: 250 }
-                            }
-                        }
-
-                        // Table rows
+                        Text { text: "Proyectos recientes"; color: window.textMuted; font.pixelSize: 12; anchors.horizontalCenter: parent.horizontalCenter }
                         Repeater {
-                            model: projectMgr.recentProjects().slice(0, 5)
+                            model: projectMgr.recentProjects().slice(0, 4)
                             Rectangle {
-                                Layout.fillWidth: true; height: 38
-                                color: rowMouse.containsMouse ? window.bgElevated : "transparent"
-                                border.color: window.borderSubtle; border.width: 1
-                                radius: 6
-
-                                RowLayout {
-                                    anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
-                                    Text {
-                                        text: "📁  " + modelData.split("\\").pop().replace(".llproj", "")
-                                        color: window.textPrimary; font.pixelSize: 12; font.bold: true
-                                        Layout.fillWidth: true
-                                    }
-                                    Text {
-                                        text: modelData
-                                        color: window.textMuted; font.pixelSize: 11; elide: Text.ElideLeft
-                                        Layout.preferredWidth: 250
-                                    }
+                                width: 500; height: 36
+                                color: recentMouse.containsMouse ? window.bgElevated : "transparent"
+                                border.color: window.borderSubtle; border.width: 1; radius: 6
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
+                                    text: "📁 " + modelData.split("\\").pop()
+                                    color: window.textSecondary; font.pixelSize: 12; elide: Text.ElideLeft; width: parent.width - 24
                                 }
-
                                 MouseArea {
-                                    id: rowMouse
-                                    anchors.fill: parent; hoverEnabled: true
-                                    onClicked: projectMgr.loadProject(modelData)
+                                    id: recentMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: {
+                                        projectMgr.loadProject(modelData)
+                                        currentScreen = 2
+                                    }
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // ── DOWNLOAD SCREEN ────────────────────────────────────────────
+            Item {
+                anchors.fill: parent
+                visible: currentScreen === 1
+
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: 560; spacing: 24
+
+                    Text { text: "⬇️ Descargar canción"; font.pixelSize: 28; font.bold: true; color: window.textPrimary; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: "Pega una URL de YouTube, YouTube Music o Spotify"; font.pixelSize: 14; color: window.textSecondary; Layout.alignment: Qt.AlignHCenter }
+
+                    // URL input
+                    Rectangle {
+                        Layout.fillWidth: true; height: 52
+                        color: window.bgCard; border.color: urlField.activeFocus ? window.lavaRed : window.borderSubtle
+                        border.width: urlField.activeFocus ? 2 : 1; radius: 10
+                        Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                        RowLayout {
+                            anchors.fill: parent; anchors.margins: 12
+                            Text { text: "🔗"; font.pixelSize: 18 }
+                            TextField {
+                                id: urlField
+                                Layout.fillWidth: true
+                                placeholderText: "https://open.spotify.com/track/... o https://youtube.com/..."
+                                color: window.textPrimary
+                                background: Item {}
+                                font.pixelSize: 13
+                                placeholderTextColor: window.textMuted
+                                onAccepted: btnDownload.clicked()
+                            }
+                        }
+                    }
+
+                    // Output dir
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 44
+                        color: window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 10
+                        RowLayout {
+                            anchors.fill: parent; anchors.margins: 12
+                            Text { text: "📂"; font.pixelSize: 16 }
+                            TextField {
+                                id: outDirField
+                                Layout.fillWidth: true
+                                text: projectMgr.defaultDownloadsDir()
+                                color: window.textSecondary
+                                background: Item {}
+                                font.pixelSize: 12
+                                placeholderTextColor: window.textMuted
+                                placeholderText: "Carpeta de destino"
+                            }
+                        }
+                    }
+
+                    // Download progress
+                    Rectangle {
+                        Layout.fillWidth: true; height: 8
+                        color: window.bgElevated; radius: 4
+                        visible: downloader.isDownloading || downloader.progress > 0
+                        Rectangle {
+                            width: parent.width * downloader.progress / 100; height: parent.height; radius: 4
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0; color: window.lavaRed }
+                                GradientStop { position: 1; color: window.lavaPurple }
+                            }
+                            Behavior on width { NumberAnimation { duration: 400 } }
+                        }
+                    }
+
+                    Text {
+                        text: downloader.statusMessage
+                        color: window.textSecondary; font.pixelSize: 12
+                        Layout.alignment: Qt.AlignHCenter
+                        visible: text !== ""
+                        wrapMode: Text.WordWrap; Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    // Buttons
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter; spacing: 12
+
+                        Button {
+                            id: btnDownload
+                            text: downloader.isDownloading ? "Descargando..." : "⬇️  Descargar"
+                            enabled: !downloader.isDownloading && urlField.text.trim() !== ""
+                            implicitWidth: 180; implicitHeight: 44
+                            onClicked: {
+                                let url = urlField.text.trim()
+                                let dir = outDirField.text.trim()
+                                if (url.indexOf("spotify") >= 0) downloader.downloadSpotify(url, dir)
+                                else downloader.downloadFromUrl(url, dir)
+                            }
+                            contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle {
+                                color: parent.enabled ? (parent.hovered ? "#ff5252" : window.lavaRed) : window.bgCard
+                                radius: 10
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                            }
+                        }
+
+                        Button {
+                            text: "📂 Abrir audio local"
+                            implicitWidth: 160; implicitHeight: 44
+                            onClicked: openMediaDialog.open()
+                            contentItem: Text { text: parent.text; color: window.textSecondary; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { color: parent.hovered ? window.bgElevated : window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 10; Behavior on color { ColorAnimation { duration: 150 } } }
+                        }
+
+                        Button {
+                            text: "✋ Cancelar"
+                            implicitWidth: 100; implicitHeight: 44
+                            enabled: downloader.isDownloading
+                            onClicked: downloader.cancel()
+                            contentItem: Text { text: parent.text; color: window.textSecondary; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                            background: Rectangle { color: parent.hovered ? window.bgElevated : window.bgCard; border.color: window.borderSubtle; border.width: 1; radius: 10 }
+                        }
+                    }
+                    Button {
+                        text: "📝 Cargar letras .lrc manualmente"
+                        onClicked: openLyricsDialog.open()
+                        contentItem: Text { text: parent.text; color: window.lavaPurple; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        background: Rectangle { color: "transparent" }
                     }
                 }
             }
@@ -1022,151 +1014,405 @@ ApplicationWindow {
                 anchors.fill: parent
                 visible: currentScreen === 2
 
+                // Contenedor principal dividido horizontalmente en Izquierda y Derecha
                 SplitView {
                     anchors.fill: parent
                     orientation: Qt.Horizontal
 
-                    // ── Left sidebar (Dividido Verticalmente: Inspector arriba, Pestañas abajo) ──
+                    // LADO IZQUIERDO (Inspector Arriba, Efectos y Biblioteca Abajo)
                     SplitView {
-                        SplitView.preferredWidth: 300
-                        SplitView.minimumWidth: 200
+                        SplitView.preferredWidth: 320
+                        SplitView.minimumWidth:   260
                         orientation: Qt.Vertical
 
-                        // [Cuadrante Izquierda Arriba] Inspector
+                        // CUADRANTE 1 (Izquierda Arriba): INSPECTOR
                         Rectangle {
-                            SplitView.preferredHeight: parent.height * 0.45
-                            SplitView.minimumHeight: 180
+                            SplitView.preferredHeight: parent.height / 2
+                            SplitView.minimumHeight: 150
                             color: window.bgDark
                             border.color: window.borderSubtle; border.width: 1
 
-                            ColumnLayout {
-                                anchors.fill: parent; anchors.margins: 12; spacing: 10
-                                Text { text: "🔍 Inspector"; font.pixelSize: 13; font.bold: true; color: window.textPrimary }
-                                Rectangle { Layout.fillWidth: true; height: 1; color: window.borderSubtle }
-                                Text { text: "Detalles del Proyecto"; color: window.textSecondary; font.pixelSize: 11; font.bold: true }
-                                Text { text: "Nombre: " + projectMgr.projectName; color: window.textMuted; font.pixelSize: 11 }
-                                Text { text: "Archivo: " + (projectMgr.projectPath === "" ? "Sin guardar" : projectMgr.projectPath.split("/").pop()); color: window.textMuted; font.pixelSize: 11 }
-                                Text { text: "Ruta completa:"; color: window.textSecondary; font.pixelSize: 10 }
-                                Text { text: projectMgr.projectPath; color: window.textMuted; font.pixelSize: 9; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
-                                Item { Layout.fillHeight: true }
+                            ScrollView {
+                                anchors.fill: parent
+                                clip: true
+                                ColumnLayout {
+                                    width: parent.width - 16
+                                    spacing: 14
+                                    anchors.margins: 10
+
+                                    Text {
+                                        text: "🔍 Inspector de Propiedades"
+                                        font.pixelSize: 13; font.bold: true; color: window.textPrimary
+                                    }
+
+                                    ColumnLayout {
+                                        visible: window.selectedClipId !== ""
+                                        spacing: 12
+                                        Layout.fillWidth: true
+
+                                        Rectangle {
+                                            Layout.fillWidth: true; height: 32
+                                            color: window.bgElevated; radius: 4
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Clip: " + window.selectedClipId.split("/").pop().split("\\").pop()
+                                                color: window.lavaOrange; font.bold: true; font.pixelSize: 11
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            spacing: 4
+                                            Text { text: "Inicio en línea de tiempo (segundos)"; font.pixelSize: 10; color: window.textSecondary }
+                                            TextField {
+                                                id: inspectorClipStart
+                                                text: window.selectedClip.start !== undefined ? window.selectedClip.start.toFixed(2) : "0.0"
+                                                color: window.textPrimary
+                                                background: Rectangle { color: window.bgCard; border.color: window.borderSubtle; radius: 4 }
+                                                font.pixelSize: 11
+                                                onAccepted: {
+                                                    timeline.moveClipById(window.selectedClipId, parseFloat(text))
+                                                }
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            spacing: 4
+                                            Text { text: "Duración del clip (segundos)"; font.pixelSize: 10; color: window.textSecondary }
+                                            TextField {
+                                                text: window.selectedClip.duration !== undefined ? window.selectedClip.duration.toFixed(2) : "0.0"
+                                                color: window.textPrimary; enabled: false; opacity: 0.6
+                                                background: Rectangle { color: window.bgCard; border.color: window.borderSubtle; radius: 4 }
+                                                font.pixelSize: 11
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 6
+                                            Text {
+                                                text: window.selectedClip.type === "video" ? "Transformar / Bucle" :
+                                                      window.selectedClip.type === "audio" ? "Audio" :
+                                                      window.selectedClip.type === "lyrics" ? "Lyrics sincronizadas" :
+                                                      window.selectedClip.type === "adjustment" ? "Capa de ajuste" : "Propiedades"
+                                                color: window.textPrimary; font.bold: true; font.pixelSize: 11
+                                            }
+                                            Text {
+                                                text: window.selectedClip.type === "video" ? "Transformar: posicion, escala, rotacion, opacidad. Bucle: Normal, Boomerang o Live." :
+                                                      window.selectedClip.type === "audio" ? "Volumen, offset y archivo fuente del clip de audio." :
+                                                      window.selectedClip.type === "lyrics" ? "Versos con timestamps. La sincronizacion se corrige moviendo el bloque completo." :
+                                                      window.selectedClip.type === "adjustment" ? "Parametros del efecto aplicado como capa sobre las pistas inferiores." : ""
+                                                color: window.textMuted; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                                            }
+                                            ComboBox {
+                                                visible: window.selectedClip.type === "video"
+                                                Layout.fillWidth: true
+                                                model: ["Normal", "Boomerang", "Live"]
+                                                onActivated: timeline.setClipProperty(window.selectedClipId, "loopMode", currentText)
+                                            }
+                                            Button {
+                                                visible: window.selectedClip.grouped === true
+                                                text: "Desagrupar audio/lyrics"
+                                                Layout.fillWidth: true
+                                                onClicked: timeline.ungroupClip(window.selectedClipId)
+                                            }
+                                        }
+
+                                        Button {
+                                            text: "🗑️ Eliminar Clip"
+                                            Layout.fillWidth: true
+                                            implicitHeight: 32
+                                            onClicked: {
+                                                timeline.deleteClip(window.selectedClipTrack, window.selectedClipId)
+                                                window.selectedClipId = ""
+                                                window.selectedClipTrack = ""
+                                            }
+                                            contentItem: Text { text: parent.text; color: "#fff"; font.bold: true; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { color: parent.hovered ? "#ff5252" : window.lavaRed; radius: 4 }
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        visible: window.selectedClipId === ""
+                                        spacing: 12
+                                        Layout.fillWidth: true
+
+                                        Text {
+                                            text: "Selecciona un clip en la línea de tiempo para ver sus propiedades."
+                                            color: window.textMuted
+                                            font.pixelSize: 11
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+
+                                        Rectangle {
+                                            Layout.fillWidth: true; height: 1
+                                            color: window.borderSubtle
+                                        }
+
+                                        Text {
+                                            text: "Configuración global de secuencia:"
+                                            font.pixelSize: 11; font.bold: true; color: window.textSecondary
+                                        }
+
+                                        Text {
+                                            text: "📐 Aspecto: " + (comboResolution.currentText.indexOf("Vertical") >= 0 ? "Vertical (9:16)" : "Horizontal (16:9)")
+                                            color: window.textSecondary; font.pixelSize: 11
+                                        }
+
+                                        Text {
+                                            text: "📂 Proyecto en: " + txtProjectLocation.text
+                                            color: window.textMuted; font.pixelSize: 10; wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                }
                             }
                         }
 
-                        // [Cuadrante Izquierda Abajo] Pestañas Multimedia / Efectos
+                        // CUADRANTE 2 (Izquierda Abajo): EFECTOS Y BIBLIOTECA MULTIMEDIA (Tabulados)
                         Rectangle {
-                            id: leftBottomTabs
-                            SplitView.preferredHeight: parent.height * 0.55
-                            SplitView.minimumHeight: 200
+                            id: quadrant2Container
+                            SplitView.preferredHeight: parent.height / 2
+                            SplitView.minimumHeight: 150
                             color: window.bgDark
                             border.color: window.borderSubtle; border.width: 1
 
-                            property int activeTab: 0 // 0 = Elementos, 1 = Efectos
+                            property string activeLeftTab: "library" // "library" | "effects"
 
                             ColumnLayout {
-                                anchors.fill: parent; spacing: 0
+                                anchors.fill: parent
+                                spacing: 0
 
-                                // Tab Header Buttons
                                 RowLayout {
                                     Layout.fillWidth: true
+                                    height: 38
                                     spacing: 0
-                                    
+
                                     Button {
-                                        text: "📂 MULTIMEDIA"
-                                        Layout.fillWidth: true; implicitHeight: 32
-                                        onClicked: leftBottomTabs.activeTab = 0
-                                        contentItem: Text { text: parent.text; color: leftBottomTabs.activeTab === 0 ? window.lavaRed : window.textSecondary; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                        background: Rectangle { color: leftBottomTabs.activeTab === 0 ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1 }
+                                        text: "📁 Biblioteca"
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        onClicked: quadrant2Container.activeLeftTab = "library"
+                                        contentItem: Text { text: parent.text; font.pixelSize: 11; font.bold: quadrant2Container.activeLeftTab === "library"; color: quadrant2Container.activeLeftTab === "library" ? window.lavaRed : window.textSecondary; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                        background: Rectangle { color: quadrant2Container.activeLeftTab === "library" ? window.bgElevated : "transparent"; border.color: quadrant2Container.activeLeftTab === "library" ? window.lavaRed : "transparent"; border.width: 1 }
                                     }
                                     Button {
-                                        text: "⚡ EFECTOS"
-                                        Layout.fillWidth: true; implicitHeight: 32
-                                        onClicked: leftBottomTabs.activeTab = 1
-                                        contentItem: Text { text: parent.text; color: leftBottomTabs.activeTab === 1 ? window.lavaRed : window.textSecondary; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                        background: Rectangle { color: leftBottomTabs.activeTab === 1 ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1 }
+                                        text: "✨ Efectos"
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        onClicked: quadrant2Container.activeLeftTab = "effects"
+                                        contentItem: Text { text: parent.text; font.pixelSize: 11; font.bold: quadrant2Container.activeLeftTab === "effects"; color: quadrant2Container.activeLeftTab === "effects" ? window.lavaRed : window.textSecondary; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                        background: Rectangle { color: quadrant2Container.activeLeftTab === "effects" ? window.bgElevated : "transparent"; border.color: quadrant2Container.activeLeftTab === "effects" ? window.lavaRed : "transparent"; border.width: 1 }
                                     }
                                 }
 
-                                // Tab content container
                                 StackLayout {
-                                    Layout.fillWidth: true; Layout.fillHeight: true
-                                    currentIndex: leftBottomTabs.activeTab
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    currentIndex: quadrant2Container.activeLeftTab === "library" ? 0 : 1
 
-                                    // Tab 0: Multimedia Library
-                                    Item {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                    // Biblioteca
+                                    ColumnLayout {
+                                        spacing: 10
+                                        anchors.margins: 10
 
+                                        Menu {
+                                            id: libraryContextMenu
+                                            MenuItem {
+                                                text: "Añadir archivo..."
+                                                onClicked: openMediaDialog.open()
+                                            }
+                                            MenuItem {
+                                                text: "Añadir canción..."
+                                                onClicked: songSearchModal.visible = true
+                                            }
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            Text { text: "📂 Explorador de Biblioteca"; font.pixelSize: 12; font.bold: true; color: window.textPrimary }
+                                            Item { Layout.fillWidth: true }
+                                            Button {
+                                                text: "＋ Importar"
+                                                implicitHeight: 24
+                                                onClicked: libraryContextMenu.popup()
+                                                contentItem: Text { text: parent.text; color: window.lavaPurple; font.bold: true; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; border.color: window.borderSubtle; border.width: 1; radius: 4 }
+                                            }
+                                        }
+
+                                        // Contenedor principal de explorador
                                         Rectangle {
-                                            anchors.fill: parent; anchors.margins: 8
-                                            color: window.bgCard; border.color: placeholderMouse.containsMouse ? window.lavaRed : window.borderSubtle
-                                            border.width: 1; radius: 8
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            color: window.bgDeep
+                                            border.color: window.borderSubtle; border.width: 1; radius: 6
 
-                                            ColumnLayout {
-                                                anchors.centerIn: parent; spacing: 10
-                                                width: parent.width * 0.9
-
-                                                Text {
-                                                    text: "📁"
-                                                    font.pixelSize: 32; Layout.alignment: Qt.AlignHCenter
+                                            // Doble clic para abrir explorador local e importar
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                onClicked: {
+                                                    if (mouse.button === Qt.RightButton) {
+                                                        libraryContextMenu.popup()
+                                                    }
                                                 }
-                                                Text {
-                                                    text: "Doble click para importar medios\n(abre explorador de Windows)"
-                                                    color: window.textPrimary; font.pixelSize: 11; font.bold: true
-                                                    horizontalAlignment: Text.AlignHCenter; Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                                }
-                                                Text {
-                                                    text: "Click derecho para importar audio\n(Buscar en Spotify, Soundcloud, etc.)"
-                                                    color: window.textMuted; font.pixelSize: 10
-                                                    horizontalAlignment: Text.AlignHCenter; Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                                onDoubleClicked: {
+                                                    openMediaDialog.open()
                                                 }
                                             }
 
-                                            MouseArea {
-                                                id: placeholderMouse
-                                                anchors.fill: parent; hoverEnabled: true
-                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                                onDoubleClicked: {
-                                                    if (mouse.button === Qt.LeftButton) {
-                                                        openMediaDialog.open()
+                                            // Vista de cuadrícula/lista de los archivos importados
+                                            ColumnLayout {
+                                                anchors.fill: parent
+                                                anchors.margins: 8
+                                                spacing: 8
+                                                visible: mediaEngine.mediaPath !== "" || lyricsLoader.isLoaded
+
+                                                Text {
+                                                    text: "Archivos en este proyecto:"
+                                                    color: window.textMuted; font.pixelSize: 10
+                                                }
+
+                                                // Tarjeta Audio
+                                                Rectangle {
+                                                    Layout.fillWidth: true; height: 50
+                                                    color: window.bgCard; border.color: window.borderSubtle; radius: 6
+                                                    visible: mediaEngine.mediaPath !== ""
+                                                    RowLayout {
+                                                        anchors.fill: parent; anchors.margins: 8; spacing: 8
+                                                        Text { text: "🎵"; font.pixelSize: 16 }
+                                                        ColumnLayout {
+                                                            spacing: 2
+                                                            Text { text: mediaEngine.mediaPath !== "" ? mediaEngine.mediaPath.split("/").pop().split("\\").pop() : ""; color: window.textPrimary; font.pixelSize: 11; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                                                            Text { text: "Archivo de Audio/Video"; color: window.textMuted; font.pixelSize: 9 }
+                                                        }
                                                     }
                                                 }
-                                                onClicked: {
-                                                    if (mouse.button === Qt.RightButton) {
-                                                        platformSearchDialog.open()
+
+                                                // Tarjeta Letras
+                                                Rectangle {
+                                                    Layout.fillWidth: true; height: 50
+                                                    color: window.bgCard; border.color: window.borderSubtle; radius: 6
+                                                    visible: lyricsLoader.isLoaded
+                                                    RowLayout {
+                                                        anchors.fill: parent; anchors.margins: 8; spacing: 8
+                                                        Text { text: "📝"; font.pixelSize: 16 }
+                                                        ColumnLayout {
+                                                            spacing: 2
+                                                            Text { text: "Letras de canción sincronizadas"; color: window.textPrimary; font.pixelSize: 11; font.bold: true }
+                                                            Text { text: lyricsLoader.getAllLines().length + " líneas cargadas"; color: "#4caf50"; font.pixelSize: 9 }
+                                                        }
                                                     }
+                                                }
+
+                                                Item { Layout.fillHeight: true }
+                                            }
+
+                                            // Estado vacío cuando no hay nada importado
+                                            ColumnLayout {
+                                                anchors.centerIn: parent
+                                                spacing: 6
+                                                visible: mediaEngine.mediaPath === "" && !lyricsLoader.isLoaded
+
+                                                Text {
+                                                    Layout.alignment: Qt.AlignHCenter
+                                                    text: "📭"
+                                                    font.pixelSize: 32
+                                                }
+                                                Text {
+                                                    Layout.alignment: Qt.AlignHCenter
+                                                    text: "Biblioteca vacía"
+                                                    color: window.textSecondary; font.pixelSize: 12; font.bold: true
+                                                }
+                                                Text {
+                                                    Layout.alignment: Qt.AlignHCenter
+                                                    text: "Doble clic aquí para importar audio/video"
+                                                    color: window.textMuted; font.pixelSize: 10
                                                 }
                                             }
                                         }
                                     }
 
-                                    // Tab 1: Effects List
-                                    ColumnLayout {
-                                        anchors.fill: parent; anchors.margins: 12; spacing: 8
-                                        Text { text: "Efectos Visuales"; font.bold: true; color: window.textPrimary; font.pixelSize: 12 }
-                                        Text { text: "• Efecto Zoom Dinámico (Activo)"; color: window.textSecondary; font.pixelSize: 11 }
-                                        Text { text: "• Bordes de Safe Zone (Red)"; color: window.textSecondary; font.pixelSize: 11 }
-                                        Text { text: "• Animación de Letras (Rebote)"; color: window.textSecondary; font.pixelSize: 11 }
-                                        Item { Layout.fillHeight: true }
+                                    // Efectos (Ajustes estilo capas de Adobe Premiere)
+                                    ScrollView {
+                                        clip: true
+                                        ColumnLayout {
+                                            width: parent.width - 16
+                                            spacing: 12
+                                            anchors.margins: 10
+
+                                            Text {
+                                                text: "✨ Capas de Ajustes y Efectos"
+                                                font.pixelSize: 13; font.bold: true; color: window.textPrimary
+                                            }
+
+                                            Text {
+                                                text: "Arrastra efectos o crea una capa de ajuste en el timeline para aplicar filtros globales:"
+                                                color: window.textSecondary; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                                            }
+
+                                            ColumnLayout {
+                                                spacing: 12
+                                                Layout.fillWidth: true
+
+                                                // Listado de efectos estilo Adobe Premiere
+                                                Repeater {
+                                                    model: [
+                                                        { name: "Capa de Ajuste (Brillo/Contraste)", desc: "Controla la exposición y contraste global", icon: "🎞️" },
+                                                        { name: "Filtro de Color (Matiz/Saturación)", desc: "Corrige y realza la colorización del video", icon: "🎨" },
+                                                        { name: "Efecto Estilo VHS / Glitch", desc: "Añade aberración cromática retro", icon: "📼" },
+                                                        { name: "Desfoque Gaussiano (Blur)", desc: "Suaviza el fondo de la previsualización", icon: "💧" }
+                                                    ]
+
+                                                    Rectangle {
+                                                        Layout.fillWidth: true; height: 58
+                                                        color: window.bgCard; border.color: window.borderSubtle; radius: 6
+
+                                                        RowLayout {
+                                                            anchors.fill: parent; anchors.margins: 8; spacing: 10
+                                                            Text { text: modelData.icon; font.pixelSize: 18 }
+                                                            ColumnLayout {
+                                                                spacing: 2
+                                                                Text { text: modelData.name; color: window.textPrimary; font.bold: true; font.pixelSize: 11 }
+                                                                Text { text: modelData.desc; color: window.textMuted; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true }
+                                                            }
+                                                        }
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            onClicked: {
+                                                                timeline.addAdjustmentClip("V3", modelData.name, mediaEngine.position || 0, 10, {"effect": modelData.name})
+                                                                projectMgr.markDirty()
+                                                                statusBar.showMsg("Capa de ajuste añadida: " + modelData.name)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    // ── Center: Viewport + Controls ────────────────────────
-                    ColumnLayout {
+                    // LADO DERECHO (Previsualización Arriba, Línea del tiempo Abajo)
+                    SplitView {
                         SplitView.fillWidth: true
-                        spacing: 0
+                        orientation: Qt.Vertical
 
-                        // Video viewport area
+                        // CUADRANTE 3 (Derecha Arriba): PREVISUALIZACIÓN
                         Rectangle {
-                            Layout.fillWidth: true; Layout.fillHeight: true
+                            SplitView.preferredHeight: 3 * parent.height / 5
+                            SplitView.minimumHeight: 200
                             color: window.bgDeep
 
-                            // 9:16 phone container
+                            // Viewport y safe zones
                             Item {
                                 id: phoneContainer
                                 anchors.centerIn: parent
-                                height: Math.min(parent.height - 16, 600)
+                                height: Math.min(parent.height - 16, 500)
                                 width: height * 9 / 16
 
                                 Rectangle {
@@ -1174,19 +1420,17 @@ ApplicationWindow {
                                     color: "#000"
                                     border.color: window.borderSubtle; border.width: 1
 
-                                    // Video frame placeholder / real frame via Image
                                     Rectangle {
                                         anchors.fill: parent; color: "#080808"
                                         Text {
                                             anchors.centerIn: parent
-                                            text: mediaEngine.mediaPath === "" ? "🎬\nArrasta un video\nal timeline" : "▶ Preview"
+                                            text: mediaEngine.mediaPath === "" ? "🎬\nArrastra un video\nal timeline" : "▶ Preview"
                                             color: window.textMuted; font.pixelSize: 14
                                             horizontalAlignment: Text.AlignHCenter
                                             wrapMode: Text.WordWrap
                                         }
                                     }
 
-                                    // Safe zone overlay
                                     Rectangle {
                                         anchors.fill: parent
                                         anchors.topMargin: parent.height * 0.10
@@ -1197,7 +1441,18 @@ ApplicationWindow {
                                         border.color: "#ff3e3e33"; border.width: 1
                                     }
 
-                                    // Lyrics overlay
+                                    Item {
+                                        anchors.fill: parent
+                                        visible: window.showGuides
+
+                                        Rectangle { x: parent.width / 3; y: 0; width: 1; height: parent.height; color: "#ffffff1a" }
+                                        Rectangle { x: 2 * parent.width / 3; y: 0; width: 1; height: parent.height; color: "#ffffff1a" }
+                                        Rectangle { x: 0; y: parent.height / 3; width: parent.width; height: 1; color: "#ffffff1a" }
+                                        Rectangle { x: 0; y: 2 * parent.height / 3; width: parent.width; height: 1; color: "#ffffff1a" }
+                                        Rectangle { x: 0; y: parent.height / 2; width: parent.width; height: 1; color: window.lavaRed; opacity: 0.25 }
+                                        Rectangle { x: parent.width / 2; y: 0; width: 1; height: parent.height; color: window.lavaRed; opacity: 0.25 }
+                                    }
+
                                     Column {
                                         anchors.centerIn: parent
                                         width: parent.width * 0.86
@@ -1212,6 +1467,7 @@ ApplicationWindow {
                                             style: Text.Outline; styleColor: "#000"
                                         }
                                         Text {
+                                            id: lyricsLine
                                             text: lyricsLoader.currentLine !== "" ? lyricsLoader.currentLine : "♪"
                                             width: parent.width; horizontalAlignment: Text.AlignHCenter
                                             font.pixelSize: phoneContainer.height * 0.045
@@ -1224,7 +1480,6 @@ ApplicationWindow {
                                                     NumberAnimation { target: lyricsLine; property: "scale"; to: 1.0; duration: 120; easing.type: Easing.OutBack }
                                                 }
                                             }
-                                            id: lyricsLine
                                         }
                                         Text {
                                             text: lyricsLoader.nextLine
@@ -1243,232 +1498,251 @@ ApplicationWindow {
                                         text: mediaEngine.formatTime(mediaEngine.position) + " / " + mediaEngine.formatTime(mediaEngine.duration)
                                         color: "#ffffff80"; font.pixelSize: 10; font.family: "Consolas"
                                     }
-                                }
-                            }
-                        }
 
-                        // Transport controls
-                        Rectangle {
-                            Layout.fillWidth: true; height: 60
-                            color: window.bgDark
-                            border.color: window.borderSubtle; border.width: 1
-
-                            ColumnLayout {
-                                anchors.fill: parent; anchors.margins: 8; spacing: 4
-
-                                // Seek bar
-                                Slider {
-                                    id: seekBar
-                                    Layout.fillWidth: true; height: 16
-                                    from: 0; to: Math.max(1, mediaEngine.duration)
-                                    value: mediaEngine.position
-                                    enabled: mediaEngine.duration > 0
-
-                                    onMoved: mediaEngine.seek(value)
-
-                                    background: Rectangle {
-                                        x: seekBar.leftPadding; y: seekBar.topPadding + seekBar.availableHeight / 2 - height / 2
-                                        width: seekBar.availableWidth; height: 4; radius: 2
-                                        color: window.bgElevated
-                                        Rectangle {
-                                            width: seekBar.visualPosition * parent.width; height: parent.height; radius: 2
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0; color: window.lavaRed }
-                                                GradientStop { position: 1; color: window.lavaOrange }
-                                            }
-                                        }
-                                    }
-                                    handle: Rectangle {
-                                        x: seekBar.leftPadding + seekBar.visualPosition * seekBar.availableWidth - width / 2
-                                        y: seekBar.topPadding + seekBar.availableHeight / 2 - height / 2
-                                        width: 14; height: 14; radius: 7
-                                        color: window.lavaRed
-                                        border.color: "#fff"; border.width: 1
-                                    }
-                                }
-
-                                // Playback buttons
-                                RowLayout {
-                                    Layout.alignment: Qt.AlignHCenter; spacing: 8
-                                    Repeater {
-                                        model: [
-                                            {text: "⏮", tip: "Inicio"},
-                                            {text: "⏪", tip: "-10s"},
-                                            {text: mediaEngine.isPlaying ? "⏸" : "▶", tip: "Play/Pausa", big: true},
-                                            {text: "⏩", tip: "+10s"},
-                                            {text: "⏭", tip: "Fin"},
-                                        ]
-                                        Button {
-                                            text: modelData.text
-                                            implicitWidth: modelData.big ? 48 : 36; implicitHeight: 32
-                                            ToolTip.visible: hovered; ToolTip.text: modelData.tip
-                                            onClicked: {
-                                                if      (index === 0) mediaEngine.seek(0)
-                                                else if (index === 1) mediaEngine.seek(Math.max(0, mediaEngine.position - 10))
-                                                else if (index === 2) mediaEngine.isPlaying ? mediaEngine.pause() : mediaEngine.play()
-                                                else if (index === 3) mediaEngine.seek(Math.min(mediaEngine.duration, mediaEngine.position + 10))
-                                                else if (index === 4) mediaEngine.seek(mediaEngine.duration)
-                                            }
-                                            contentItem: Text { text: parent.text; color: window.textPrimary; font.pixelSize: modelData.big ? 18 : 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                                            background: Rectangle { color: parent.hovered ? window.bgElevated : "transparent"; radius: 6 }
-                                        }
-                                    }
-
-                                    // Volume slider
-                                    Text { text: "🔊"; color: window.textMuted; font.pixelSize: 12 }
-                                    Slider {
-                                        id: volSlider; from: 0; to: 1; value: mediaEngine.volume
-                                        implicitWidth: 80; implicitHeight: 20
-                                        onMoved: mediaEngine.volume = value
-                                        background: Rectangle {
-                                            x: volSlider.leftPadding; y: volSlider.topPadding + volSlider.availableHeight/2 - height/2
-                                            width: volSlider.availableWidth; height: 3; radius: 2; color: window.bgElevated
-                                            Rectangle { width: volSlider.visualPosition * parent.width; height: parent.height; radius: 2; color: window.textSecondary }
-                                        }
-                                        handle: Rectangle {
-                                            x: volSlider.leftPadding + volSlider.visualPosition * volSlider.availableWidth - width/2
-                                            y: volSlider.topPadding + volSlider.availableHeight/2 - height/2
-                                            width: 10; height: 10; radius: 5; color: window.textSecondary
-                                        }
-                                    }
-
-                                    // Zoom
-                                    Text { text: "🔍"; color: window.textMuted; font.pixelSize: 12; Layout.leftMargin: 8 }
-                                    Slider {
-                                        from: 20; to: 300; value: timelineScale
-                                        implicitWidth: 80; implicitHeight: 20
-                                        onMoved: timelineScale = value
-                                        background: Rectangle {
-                                            x: parent.leftPadding; y: parent.topPadding + parent.availableHeight/2 - height/2
-                                            width: parent.availableWidth; height: 3; radius: 2; color: window.bgElevated
-                                            Rectangle { width: parent.parent.visualPosition * parent.width; height: parent.height; radius: 2; color: window.textMuted }
-                                        }
-                                        handle: Rectangle {
-                                            x: parent.leftPadding + parent.visualPosition * parent.availableWidth - width/2
-                                            y: parent.topPadding + parent.availableHeight/2 - height/2
-                                            width: 10; height: 10; radius: 5; color: window.textMuted
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // ── Timeline ───────────────────────────────────────
-                        Rectangle {
-                            Layout.fillWidth: true; height: 200
-                            color: window.bgDark
-                            border.color: window.borderSubtle; border.width: 1
-
-                            ColumnLayout {
-                                anchors.fill: parent; spacing: 0
-
-                                // Timeline header (track labels + ruler)
-                                RowLayout {
-                                    height: 28; Layout.fillWidth: true; spacing: 0
-
-                                    Rectangle {
-                                        width: 110; height: parent.height; color: "#121220"
-                                        Text { anchors.centerIn: parent; text: "Pistas"; color: window.textMuted; font.pixelSize: 10 }
-                                    }
-
-                                    // Time ruler
-                                    ScrollView {
-                                        id: rulerScroll
-                                        Layout.fillWidth: true; height: parent.height; clip: true
-
-                                        Row {
-                                            width: Math.max(timelineScroll.contentWidth, 2000)
-                                            height: 28
-
-                                            Repeater {
-                                                model: Math.ceil(Math.max(mediaEngine.duration, 60) / 5) + 1
-                                                Item {
-                                                    width: 5 * timelineScale; height: 28
-                                                    Rectangle {
-                                                        width: 1; height: 12; color: window.borderSubtle
-                                                        anchors.top: parent.top
-                                                    }
-                                                    Text {
-                                                        text: {
-                                                            let s = index * 5; let m = Math.floor(s/60)
-                                                            return String(m).padStart(2,'0') + ":" + String(s%60).padStart(2,'0')
-                                                        }
-                                                        anchors.top: parent.top; anchors.topMargin: 12; anchors.left: parent.left; anchors.leftMargin: 3
-                                                        color: window.textMuted; font.pixelSize: 9; font.family: "Consolas"
-                                                    }
+                                    // Selector de calidad de previsualización (top-right)
+                                    Row {
+                                        anchors.top: parent.top; anchors.right: parent.right
+                                        anchors.margins: 6
+                                        spacing: 2
+                                        property string activeQual: "1/1"
+                                        Repeater {
+                                            model: ["1/1", "1/2", "1/4"]
+                                            Button {
+                                                text: modelData
+                                                implicitWidth: 32; implicitHeight: 20
+                                                contentItem: Text { text: parent.text; font.pixelSize: 8; font.bold: true; color: parent.parent.activeQual === modelData ? "#fff" : window.textMuted; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: parent.parent.activeQual === modelData ? window.lavaRed : window.bgCard; radius: 3; border.color: window.borderSubtle; border.width: 1 }
+                                                onClicked: {
+                                                    parent.parent.activeQual = modelData
+                                                    statusBar.showMsg("Calidad de previsualización ajustada a: " + modelData)
                                                 }
                                             }
                                         }
                                     }
                                 }
+                            }
+                        }
 
-                                // Timeline tracks
-                                ScrollView {
-                                    id: timelineScroll
-                                    Layout.fillWidth: true; Layout.fillHeight: true; clip: true
+                        // CUADRANTE 4 (Derecha Abajo): LINEA DEL TIEMPO + CONTROLES
+                        Rectangle {
+                            SplitView.preferredHeight: 2 * parent.height / 5
+                            SplitView.minimumHeight: 180
+                            color: window.bgDark
+                            border.color: window.borderSubtle; border.width: 1
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                spacing: 0
+
+                                // Controles de reproducción y transporte
+                                Rectangle {
+                                    Layout.fillWidth: true; height: 50
+                                    color: window.bgDark
+                                    border.color: window.borderSubtle; border.width: 1
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 6
+                                        spacing: 8
+
+                                        // SeekBar
+                                        Slider {
+                                            id: seekBar
+                                            Layout.fillWidth: true
+                                            from: 0; to: Math.max(1, mediaEngine.duration)
+                                            value: mediaEngine.position
+                                            enabled: mediaEngine.duration > 0
+                                            onMoved: mediaEngine.seek(value)
+                                        }
+
+                                        // Controles
+                                        RowLayout {
+                                            spacing: 4
+                                            Repeater {
+                                                model: [
+                                                    {text: "⏮", tip: "Inicio"},
+                                                    {text: "⏪", tip: "-10s"},
+                                                    {text: mediaEngine.isPlaying ? "⏸" : "▶", tip: "Play/Pausa", big: true},
+                                                    {text: "⏩", tip: "+10s"},
+                                                    {text: "⏭", tip: "Fin"}
+                                                ]
+                                                Button {
+                                                    text: modelData.text
+                                                    implicitWidth: modelData.big ? 40 : 30; implicitHeight: 26
+                                                    ToolTip.visible: hovered; ToolTip.text: modelData.tip
+                                                    onClicked: {
+                                                        if      (index === 0) mediaEngine.seek(0)
+                                                        else if (index === 1) mediaEngine.seek(Math.max(0, mediaEngine.position - 10))
+                                                        else if (index === 2) mediaEngine.isPlaying ? mediaEngine.pause() : mediaEngine.play()
+                                                        else if (index === 3) mediaEngine.seek(Math.min(mediaEngine.duration, mediaEngine.position + 10))
+                                                        else if (index === 4) mediaEngine.seek(mediaEngine.duration)
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Text { text: "🔊"; color: window.textMuted; font.pixelSize: 10 }
+                                        Slider {
+                                            id: volSlider; from: 0; to: 1; value: mediaEngine.volume
+                                            implicitWidth: 60
+                                            onMoved: mediaEngine.volume = value
+                                        }
+
+                                        Text { text: "🔍"; color: window.textMuted; font.pixelSize: 10 }
+                                        Slider {
+                                            from: 20; to: 300; value: timelineScale
+                                            implicitWidth: 60
+                                            onMoved: timelineScale = value
+                                        }
+
+                                        CheckBox {
+                                            id: chkGuides
+                                            text: "Guías"
+                                            checked: window.showGuides
+                                            onCheckedChanged: window.showGuides = checked
+                                            contentItem: Text { text: parent.text; font.pixelSize: 10; color: window.textSecondary; verticalAlignment: Text.AlignVCenter; leftPadding: 16 }
+                                        }
+                                    }
+                                }
+
+                                // Timeline Tracks
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    color: "#0f0f1a"
 
                                     ColumnLayout {
-                                        spacing: 2; width: Math.max(mediaEngine.duration * timelineScale + 200, 2000)
+                                        anchors.fill: parent
+                                        spacing: 0
 
-                                        Repeater {
-                                            model: [
-                                                {name: "🎬 Video",        track: "video",  color: "#152535", border: "#355575", textColor: "#79aada"},
-                                                {name: "🎵 Audio/Letras", track: "audio",  color: "#251525", border: "#753555", textColor: "#da7979"},
-                                            ]
-                                            RowLayout {
-                                                height: 48; spacing: 0
-
-                                                // Track label
-                                                Rectangle {
-                                                    width: 110; height: parent.height; color: "#121220"
-                                                    border.color: window.borderSubtle; border.width: 1
-                                                    Text { anchors.centerIn: parent; text: modelData.name; color: window.textSecondary; font.pixelSize: 10 }
-                                                }
-
-                                                // Track lane
-                                                Rectangle {
-                                                    Layout.fillWidth: true; height: parent.height
-                                                    color: "#0f0f1a"
-                                                    border.color: window.borderSubtle; border.width: 1
-                                                    clip: true
-
-                                                    // Drop zone
-                                                    DropArea {
-                                                        anchors.fill: parent
-                                                        onDropped: {
-                                                            if (drop.hasUrls) {
-                                                                let path = drop.urls[0].toString().replace("file:///","")
-                                                                let startSec = drop.x / timelineScale
-                                                                timeline.addClip(modelData.track, path, modelData.track, startSec, 30, 0)
-                                                            }
-                                                        }
-                                                    }
-
-                                                    // Clips
+                                        // Regla de tiempo
+                                        RowLayout {
+                                            height: 24; Layout.fillWidth: true; spacing: 0
+                                            Rectangle { width: 100; height: parent.height; color: "#121220" }
+                                            ScrollView {
+                                                id: rulerScroll
+                                                Layout.fillWidth: true; height: parent.height; clip: true
+                                                Row {
+                                                    width: Math.max(timelineScroll.contentWidth, 2000)
+                                                    height: 24
                                                     Repeater {
-                                                        model: timeline.getClips(modelData.track)
-                                                        Rectangle {
-                                                            x: modelData.start * timelineScale
-                                                            width: modelData.duration * timelineScale
-                                                            height: parent.height - 4; y: 2; radius: 4
-                                                            color: modelData.color; border.color: modelData.border; border.width: 1
+                                                        model: Math.ceil(Math.max(mediaEngine.duration, 60) / 5) + 1
+                                                        Item {
+                                                            width: 5 * timelineScale; height: 24
+                                                            Rectangle { width: 1; height: 8; color: window.borderSubtle; anchors.top: parent.top }
                                                             Text {
-                                                                anchors.centerIn: parent
-                                                                text: modelData.id.split("/").pop().split("\\").pop()
-                                                                color: modelData.textColor; font.pixelSize: 10; elide: Text.ElideRight; width: parent.width - 8
-                                                                horizontalAlignment: Text.AlignHCenter
+                                                                text: {
+                                                                    let s = index * 5; let m = Math.floor(s/60)
+                                                                    return String(m).padStart(2,'0') + ":" + String(s%60).padStart(2,'0')
+                                                                }
+                                                                anchors.top: parent.top; anchors.topMargin: 8; anchors.left: parent.left; anchors.leftMargin: 2
+                                                                color: window.textMuted; font.pixelSize: 8; font.family: "Consolas"
                                                             }
-                                                            DragHandler { onActiveChanged: if (!active) timeline.moveClip(modelData.track, modelData.id, x / timelineScale) }
                                                         }
                                                     }
+                                                }
+                                            }
+                                        }
 
-                                                    // Playhead
-                                                    Rectangle {
-                                                        x: mediaEngine.position * timelineScale - 1
-                                                        width: 2; height: parent.height
-                                                        color: window.lavaRed; opacity: 0.9
-                                                        Rectangle { width: 8; height: 8; radius: 4; color: window.lavaRed; anchors.horizontalCenter: parent.horizontalCenter; y: -4 }
+                                        // Lanes
+                                        ScrollView {
+                                            id: timelineScroll
+                                            Layout.fillWidth: true; Layout.fillHeight: true; clip: true
+                                            ColumnLayout {
+                                                spacing: 1; width: Math.max(mediaEngine.duration * timelineScale + 200, 2000)
+
+                                                Repeater {
+                                                    model: [
+                                                        {name: "V3", track: "V3", type: "video"},
+                                                        {name: "V2", track: "V2", type: "video"},
+                                                        {name: "V1", track: "V1", type: "video"},
+                                                        {name: "A1", track: "A1", type: "audio"},
+                                                        {name: "A2", track: "A2", type: "audio"},
+                                                        {name: "A3", track: "A3", type: "audio"}
+                                                    ]
+                                                    RowLayout {
+                                                        height: 38; spacing: 0
+
+                                                        Rectangle {
+                                                            width: 100; height: parent.height; color: "#121220"
+                                                            border.color: window.borderSubtle; border.width: 1
+                                                            Text { anchors.centerIn: parent; text: modelData.name; color: window.textSecondary; font.pixelSize: 9 }
+                                                        }
+
+                                                        Rectangle {
+                                                            Layout.fillWidth: true; height: parent.height
+                                                            color: "#0f0f1a"
+                                                            border.color: window.borderSubtle; border.width: 1
+                                                            clip: true
+
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                                onClicked: {
+                                                                    if (mouse.button === Qt.RightButton) {
+                                                                        trackContextMenu.popup()
+                                                                    }
+                                                                }
+                                                                onDoubleClicked: openMediaDialog.open()
+
+                                                                Menu {
+                                                                    id: trackContextMenu
+                                                                    MenuItem {
+                                                                        text: modelData.track === "audio" ? "🎵 Añadir Audio / Letras..." : "🎬 Añadir Video..."
+                                                                        onClicked: {
+                                                                            openMediaDialog.open()
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            DropArea {
+                                                                anchors.fill: parent
+                                                                onDropped: {
+                                                                    if (drop.hasUrls) {
+                                                                        let path = drop.urls[0].toString().replace("file:///","")
+                                                                        let startSec = drop.x / timelineScale
+                                                                        let clipType = modelData.type === "audio" ? "audio" : (String(path).toLowerCase().endsWith(".lrc") ? "lyrics" : "video")
+                                                                        timeline.addMediaClip(modelData.track, clipType, basename(path), path, startSec, 30, 0)
+                                                                        if (clipType === "audio") mediaEngine.loadMedia(path)
+                                                                        projectMgr.markDirty()
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            Repeater {
+                                                                model: timeline.getTrackClips(modelData.track)
+                                                                Rectangle {
+                                                                    x: modelData.start * timelineScale
+                                                                    width: modelData.duration * timelineScale
+                                                                    height: parent.height - 4; y: 2; radius: 4
+                                                                    color: modelData.type === "lyrics" ? "#40306a" : modelData.type === "audio" ? "#2b1a2d" : modelData.type === "adjustment" ? "#3a3420" : "#152535"
+                                                                    border.color: window.selectedClipId === modelData.id ? window.lavaRed : modelData.type === "lyrics" ? "#9d7cff" : modelData.type === "audio" ? "#8d4a70" : modelData.type === "adjustment" ? "#c9a64b" : "#355575"
+                                                                    border.width: window.selectedClipId === modelData.id ? 2 : 1
+                                                                    Text {
+                                                                        anchors.centerIn: parent
+                                                                        text: (modelData.grouped ? "🔗 " : "") + (modelData.name || modelData.id)
+                                                                        color: modelData.type === "lyrics" ? "#d8cfff" : modelData.type === "audio" ? "#ff9ccc" : "#79aada"; font.pixelSize: 9; elide: Text.ElideRight; width: parent.width - 8
+                                                                        horizontalAlignment: Text.AlignHCenter
+                                                                    }
+                                                                    MouseArea {
+                                                                        anchors.fill: parent
+                                                                        onClicked: {
+                                                                            window.selectedClipId = modelData.id
+                                                                            window.selectedClipTrack = modelData.trackId
+                                                                        }
+                                                                    }
+                                                                    DragHandler { onActiveChanged: if (!active) timeline.moveClipById(modelData.id, x / timelineScale) }
+                                                                }
+                                                            }
+
+                                                            Rectangle {
+                                                                x: mediaEngine.position * timelineScale - 1
+                                                                width: 2; height: parent.height
+                                                                color: window.lavaRed; opacity: 0.9
+                                                                Rectangle { width: 6; height: 6; radius: 3; color: window.lavaRed; anchors.horizontalCenter: parent.horizontalCenter; y: -3 }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1478,6 +1752,65 @@ ApplicationWindow {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        Rectangle {
+            id: toastBox
+            visible: window.toastMessage !== ""
+            z: 999
+            width: Math.min(520, window.width - 48)
+            implicitHeight: toastContent.implicitHeight + 24
+            radius: 8
+            color: window.toastType === "error" ? "#341417" : window.toastType === "success" ? "#12301f" : window.bgElevated
+            border.color: window.toastType === "error" ? "#ff5a66" : window.toastType === "success" ? "#4caf50" : window.borderSubtle
+            Layout.alignment: Qt.AlignRight
+            Layout.rightMargin: 18
+
+            Timer {
+                id: toastTimer
+                interval: window.toastType === "error" ? 12000 : 4500
+                repeat: false
+                onTriggered: window.toastMessage = ""
+            }
+
+            RowLayout {
+                id: toastContent
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 10
+                Text {
+                    text: window.toastType === "error" ? "ERR" : window.toastType === "success" ? "OK" : "INFO"
+                    color: "#fff"
+                    font.bold: true
+                    font.pixelSize: 11
+                    Layout.alignment: Qt.AlignTop
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: window.toastMessage
+                    color: window.textPrimary
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 8
+                    elide: Text.ElideRight
+                }
+                Button {
+                    visible: window.toastType === "error"
+                    text: "Copiar error"
+                    implicitWidth: 92
+                    implicitHeight: 26
+                    onClicked: {
+                        projectMgr.copyToClipboard(window.toastMessage)
+                        statusBar.showMsg("Error copiado al portapapeles")
+                    }
+                }
+                Button {
+                    text: "x"
+                    implicitWidth: 24
+                    implicitHeight: 24
+                    onClicked: window.toastMessage = ""
                 }
             }
         }
@@ -1523,80 +1856,5 @@ ApplicationWindow {
         }
 
         QtObject { id: statusBar; function showMsg(msg) { statusBarRect.showMsg(msg) } }
-    }
-
-    // ── Global Error Toast ─────────────────────────────────────────────────
-    Rectangle {
-        id: toastErrorBox
-        visible: false
-        width: 480; height: 75; radius: 8
-        color: "#1e0f0f"; border.color: "#ff3e3e"; border.width: 1.5
-        anchors.bottom: parent.bottom; anchors.bottomMargin: 30
-        anchors.horizontalCenter: parent.horizontalCenter
-        z: 99999
-
-        property string errorDetails: ""
-
-        RowLayout {
-            anchors.fill: parent; anchors.margins: 12; spacing: 12
-
-            Text {
-                text: "⚠️"
-                font.pixelSize: 22; Layout.alignment: Qt.AlignVCenter
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true; spacing: 2; Layout.alignment: Qt.AlignVCenter
-                Text {
-                    text: "¡Ocurrió un error en el backend!"
-                    color: "#ff8b8b"; font.pixelSize: 11; font.bold: true
-                }
-                Text {
-                    text: toastErrorBox.errorDetails
-                    color: "#ffbaba"; font.pixelSize: 10
-                    elide: Text.ElideRight; Layout.fillWidth: true
-                }
-            }
-
-            Button {
-                text: "Copiar"
-                implicitWidth: 70; implicitHeight: 28
-                onClicked: {
-                    searchField.text = toastErrorBox.errorDetails // Use a dummy helper to set/get or clipboard
-                    // Standard way in Qt QML to copy to clipboard is using an invisible TextInput
-                    clipboardHelper.text = toastErrorBox.errorDetails
-                    clipboardHelper.selectAll()
-                    clipboardHelper.copy()
-                    statusBar.showMsg("¡Copiado al portapapeles!")
-                }
-                contentItem: Text { text: parent.text; color: "#fff"; font.pixelSize: 10; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                background: Rectangle { color: parent.hovered ? "#4a1111" : "#340a0a"; border.color: "#ff3e3e"; border.width: 1; radius: 4 }
-            }
-
-            Button {
-                text: "✕"
-                implicitWidth: 24; implicitHeight: 28
-                onClicked: toastErrorBox.visible = false
-                contentItem: Text { text: parent.text; color: "#ff8b8b"; font.pixelSize: 11; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                background: Item {}
-            }
-        }
-
-        TextInput {
-            id: clipboardHelper
-            visible: false
-        }
-
-        function triggerError(msg) {
-            errorDetails = msg
-            visible = true
-            toastTimer.restart()
-        }
-
-        Timer {
-            id: toastTimer
-            interval: 8000
-            onTriggered: toastErrorBox.visible = false
-        }
     }
 }

@@ -58,6 +58,13 @@ if ($mingwTools) {
 $env:CMAKE_PREFIX_PATH = $qtBase
 Write-Host "CMAKE_PREFIX_PATH = $qtBase"
 
+# Agregar CMake de Qt al PATH si existe
+$cmakeBin = "C:\Qt\Tools\CMake_64\bin"
+if (Test-Path $cmakeBin) {
+    $env:PATH = "$cmakeBin;$env:PATH"
+    Write-Host "Found CMake at: $cmakeBin" -ForegroundColor Green
+}
+
 # ── 4. Create build directory ─────────────────────────────────────────────────
 $buildDir = "build-release"
 New-Item -ItemType Directory -Force -Path $buildDir | Out-Null

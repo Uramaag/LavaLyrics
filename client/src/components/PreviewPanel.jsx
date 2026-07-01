@@ -469,61 +469,50 @@ export default function PreviewPanel({ videoRef: externalVideoRef, audioRef: ext
 
       </div>
 
-      {/* Controls Bar - fuera del canvas para tener todo el ancho */}
-      <div className="preview-controls-bar" style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 16px 12px', borderTop: '1px solid var(--border-subtle)', background: 'rgba(0,0,0,0.15)', flexShrink: 0 }}>
-        {/* Scrubber */}
-        <input
-          type="range"
-          min="0"
-          max={totalTime || 100}
-          step="0.05"
-          value={masterTime}
-          onChange={(e) => seekTo(parseFloat(e.target.value))}
-          style={{ width: '100%', height: '4px', background: 'var(--border-subtle)', borderRadius: '2px', outline: 'none', cursor: 'pointer', accentColor: 'var(--lava-red)' }}
+      {/* Controls Bar */}
+      <div className="preview-controls-bar" style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '6px 14px 10px', borderTop: '1px solid var(--border-subtle)', background: 'rgba(0,0,0,0.15)', flexShrink: 0 }}>
+
+        {/* Fila 1: Scrubber - solo aplica al soltar para no cortar el audio */}
+        <ScrubberInput
+          totalTime={totalTime}
+          masterTime={masterTime}
+          setMasterTime={setMasterTime}
+          seekTo={seekTo}
         />
-        {/* Buttons row */}
+
+        {/* Fila 2: Botones de transporte + tiempo */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
           <button id="btn-back-start" className="btn-icon" title="Inicio" onClick={() => seekTo(0)} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏮</button>
           <button id="btn-back5" className="btn-icon" title="-5s" onClick={() => seekTo(Math.max(0, masterTime - 5))} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏪</button>
           <button id="btn-play-pause" className="btn-icon" onClick={togglePlay} style={{ width: '36px', height: '36px', fontSize: '1.1rem', flexShrink: 0 }}>{isPlaying ? '⏸' : '▶'}</button>
-          <button id="btn-fwd-frame" className="btn-icon" title="+1 frame" onClick={stepForwardFrame} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏭</button>
           <button id="btn-fwd5" className="btn-icon" title="+5s" onClick={() => seekTo(Math.min(totalTime, masterTime + 5))} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏩</button>
-          <button id="btn-go-end" className="btn-icon" title="Final" onClick={() => seekTo(totalTime)} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏭|</button>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '12px', whiteSpace: 'nowrap' }}>
+          <button id="btn-go-end" className="btn-icon" title="Final" onClick={() => seekTo(totalTime)} style={{ height: '30px', width: '30px', fontSize: '0.85rem', flexShrink: 0 }}>⏭</button>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: '10px', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
             {formatTime(masterTime)} / {formatTime(totalTime)}
           </span>
-
-          {/* Zoom slider - aplica solo al soltar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: 'auto', flexShrink: 0 }}>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🔍</span>
-            <input
-              type="range"
-              min="1"
-              max="5"
-              step="0.1"
-              defaultValue="1"
-              style={{ width: '80px', accentColor: '#f97316', cursor: 'pointer' }}
-              onChange={(e) => { pendingZoomRef.current = parseFloat(e.target.value) }}
-              onPointerUp={(e) => {
-                const v = parseFloat(e.target.value)
-                pendingZoomRef.current = v
-                setZoomLevel(v)
-                if (v === 1) setZoomOrigin({ x: 0.5, y: 0.5 })
-              }}
-            />
-            <span style={{ fontSize: '0.65rem', color: '#f97316', fontWeight: 'bold', minWidth: '28px' }}>
-              {zoomLevel.toFixed(1)}x
-            </span>
-            {zoomLevel > 1 && (
-              <button
-                className="btn-icon"
-                style={{ height: '22px', width: '22px', fontSize: '0.6rem', flexShrink: 0, padding: 0 }}
-                title="Resetear zoom"
-                onClick={() => { setZoomLevel(1); setZoomOrigin({ x: 0.5, y: 0.5 }); pendingZoomRef.current = 1 }}
-              >✕</button>
-            )}
-          </div>
         </div>
+
+        {/* Fila 3: Zoom */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>🔍 Zoom</span>
+          <input
+            type="range"
+            min="1" max="5" step="0.1" defaultValue="1"
+            style={{ width: '100px', accentColor: '#f97316', cursor: 'pointer' }}
+            onChange={(e) => { pendingZoomRef.current = parseFloat(e.target.value) }}
+            onPointerUp={(e) => {
+              const v = parseFloat(e.target.value)
+              setZoomLevel(v)
+              if (v === 1) setZoomOrigin({ x: 0.5, y: 0.5 })
+            }}
+          />
+          <span style={{ fontSize: '0.65rem', color: '#f97316', fontWeight: 'bold', minWidth: '28px' }}>{zoomLevel.toFixed(1)}x</span>
+          {zoomLevel > 1 && (
+            <button className="btn-icon" style={{ height: '20px', width: '20px', fontSize: '0.55rem', padding: 0 }}
+              onClick={() => { setZoomLevel(1); setZoomOrigin({ x: 0.5, y: 0.5 }) }}>✕</button>
+          )}
+        </div>
+
       </div>
     </div>
   )
@@ -552,7 +541,8 @@ function VUMeter({ audioRef, isPlaying }) {
 
         const source = ctx.createMediaElementSource(el)
         source.connect(analyser)
-        analyser.connect(ctx.destination)
+        // NO conectar al destination — el audio ya sale del elemento HTML directamente
+        // analyser.connect(ctx.destination) ← este causaba el pitido/duplicación
 
         audioContextRef.current = ctx
         analyserRef.current = analyser

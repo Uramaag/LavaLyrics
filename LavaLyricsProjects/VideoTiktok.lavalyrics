@@ -1,11 +1,11 @@
 {
   "projectName": "VideoTiktok",
-  "currentJobId": "13db68f0-d6c1-4b3d-9efb-ac1daf7fea6a",
+  "currentJobId": "887e9331-9855-4f8a-8483-f75ad96f19cb",
   "trackName": "Último Tema",
   "artistName": "Enjambre",
   "hasLyrics": true,
   "audioDuration": 228.437917,
-  "bgVideoPath": "C:\\Users\\Xilito\\Documents\\Antigravity Projects\\LavaLyrics\\data\\backgrounds\\78850eba-51df-4988-a5cc-f1014ae38815_IMG_4652.mov",
+  "bgVideoPath": "C:\\Users\\urama\\OneDrive\\Documents\\Antigravity Projects\\lavalyrics\\data\\backgrounds\\5c5f91f4-8b87-4f38-b996-398a91944dbe_IMG_4532.MOV",
   "bgVideoDuration": 15.698333,
   "parsedLyrics": [
     {
@@ -128,11 +128,11 @@
   "tracks": {
     "audio": [
       {
-        "id": "audio-cut-0.940480666041905",
+        "id": "audio-main-1782241036764",
         "type": "audio",
         "start": 0,
-        "duration": 220.08531283333332,
-        "mediaStart": 8.352604166666667
+        "duration": 228.437917,
+        "mediaStart": 0
       }
     ],
     "video": [
@@ -161,28 +161,125 @@
         "layer": 1
       },
       {
-        "id": "clip-dup-0.111077703346388",
+        "id": "clip-dup-0.03637048687855249",
         "type": "video",
         "start": 47.094999,
         "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.6334533256327617",
+        "type": "video",
+        "start": 62.793332,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.7207799442925443",
+        "type": "video",
+        "start": 78.491665,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.8701150999907943",
+        "type": "video",
+        "start": 94.189998,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.2621616355588495",
+        "type": "video",
+        "start": 109.88833100000001,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.20976948342760338",
+        "type": "video",
+        "start": 125.58666400000001,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.36521448293609937",
+        "type": "video",
+        "start": 141.284997,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.17141986335769055",
+        "type": "video",
+        "start": 156.98333,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.0824556535173312",
+        "type": "video",
+        "start": 172.681663,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.803559815649102",
+        "type": "video",
+        "start": 188.37999599999998,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.7023340379728962",
+        "type": "video",
+        "start": 204.07832899999997,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.17440018744830954",
+        "type": "video",
+        "start": 219.77666199999996,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.883970949462646",
+        "type": "video",
+        "start": 235.47499499999995,
+        "duration": 15.698333,
+        "mediaStart": 0,
+        "layer": 1
+      },
+      {
+        "id": "clip-dup-0.048517482084032504",
+        "type": "video",
+        "start": 251.17332799999994,
+        "duration": 2.051901000000072,
         "mediaStart": 0,
         "layer": 1
       }
     ],
     "lyrics": [
       {
-        "id": "lyrics-main-1782257841819",
-        "type": "lyrics",
-        "start": -8.352604166666667,
-        "duration": 8.352604166666667,
-        "mediaStart": -0.5
-      },
-      {
-        "id": "lyrics-cut-0.940480666041905",
+        "id": "lyrics-main-1782241036764",
         "type": "lyrics",
         "start": 0,
-        "duration": 220.08531283333332,
-        "mediaStart": -0.5
+        "duration": 228.437917,
+        "mediaStart": 0
       }
     ]
   },
@@ -198,11 +295,12 @@
     "resolution": "1080x1920",
     "orientation": "vertical",
     "fps": 30,
-    "inPoint": 8,
-    "outPoint": 228.437917,
+    "inPoint": 0,
+    "outPoint": 30,
     "letterSpacing": 0,
     "lineHeight": 1,
-    "fontSize": 15
+    "fontSize": 20,
+    "lyricGap": 30
   },
   "audioWavemap": [
     {

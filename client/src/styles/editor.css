@@ -119,9 +119,6 @@
   height: calc(100% - 80px);
 }
 .preview-canvas-area video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   display: block;
 }
 .preview-lyrics-overlay {

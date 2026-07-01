@@ -20,13 +20,15 @@ public:
     QString projectName() const;
     bool isDirty() const;
 
-    Q_INVOKABLE bool newProject(const QString &name);
+    Q_INVOKABLE bool newProject(const QString &name, const QString &location, const QString &resolution);
     Q_INVOKABLE bool saveProject(const QString &path = QString());
     Q_INVOKABLE bool loadProject(const QString &path);
     Q_INVOKABLE QVariantMap getProjectData() const;
     Q_INVOKABLE void setProjectData(const QVariantMap &data);
     Q_INVOKABLE void markDirty();
     Q_INVOKABLE QStringList recentProjects() const;
+    Q_INVOKABLE void copyToClipboard(const QString &text) const;
+    Q_INVOKABLE QString defaultDownloadsDir() const;
 
 signals:
     void projectPathChanged();

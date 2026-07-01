@@ -109,6 +109,20 @@ void VideoExporter::runExport(const QString &outputPath,
     int vidW = resParts.value(0, "1080").toInt();
     int vidH = resParts.value(1, "1920").toInt();
 
+    QString primaryVideoPath;
+    double exportDuration = settings.value("duration", 0).toDouble();
+    for (const QVariant &item : videoClips) {
+        QVariantMap clip = item.toMap();
+        const QString type = clip.value("type").toString();
+        const QString path = clip.value("path").toString();
+        if ((type == "video" || type.isEmpty()) && QFileInfo::exists(path)) {
+            primaryVideoPath = path;
+            if (exportDuration <= 0)
+                exportDuration = clip.value("start").toDouble() + clip.value("duration").toDouble();
+            break;
+        }
+    }
+
     setStatus("Generando frames de letras...");
     m_progress = 5.0;
     emit progressChanged();
@@ -228,17 +242,26 @@ void VideoExporter::runExport(const QString &outputPath,
         // Output: H.264 MP4, 9:16
         QStringList args;
 
-        // Background: solid dark color looped for audio duration
-        args << "-f" << "lavfi"
-             << "-i" << QString("color=c=0x0a0a0a:s=%1x%2:r=%3").arg(vidW).arg(vidH).arg(fps);
+        const bool hasVideo = !primaryVideoPath.isEmpty();
+        if (hasVideo) {
+            args << "-stream_loop" << "-1"
+                 << "-i" << primaryVideoPath;
+        } else {
+            args << "-f" << "lavfi"
+                 << "-i" << QString("color=c=0x0a0a0a:s=%1x%2:r=%3").arg(vidW).arg(vidH).arg(fps);
+        }
 
         // Audio input
         if (!audioPath.isEmpty() && QFileInfo::exists(audioPath)) {
             args << "-i" << audioPath;
         }
 
-        // Video filter: burn ASS subtitles
-        QString vf = QString("ass='%1'").arg(assPath.replace("\\", "/").replace("'", "'\\''"));
+        QString assFilterPath = assPath;
+        assFilterPath = assFilterPath.replace("\\", "/").replace(":", "\\:");
+        QString vf = QString("scale=%1:%2:force_original_aspect_ratio=increase,crop=%1:%2,setsar=1,fps=%3")
+                         .arg(vidW).arg(vidH).arg(fps);
+        if (!lyricsData.isEmpty())
+            vf += QString(",ass='%1'").arg(assFilterPath.replace("'", "'\\''"));
         args << "-vf" << vf;
 
         // Map streams
@@ -257,9 +280,11 @@ void VideoExporter::runExport(const QString &outputPath,
         if (!audioPath.isEmpty() && QFileInfo::exists(audioPath))
             args << "-c:a" << "aac" << "-b:a" << "192k";
 
-        // Shortest flag (stop when audio ends)
+        if (exportDuration > 0)
+            args << "-t" << QString::number(exportDuration, 'f', 3);
+
         args << "-shortest"
-             << "-y"          // overwrite
+             << "-y"
              << outputPath;
 
         qDebug() << "[VideoExporter] ffmpeg args:" << args.join(' ');

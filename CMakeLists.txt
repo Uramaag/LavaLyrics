@@ -25,7 +25,7 @@ list(APPEND CMAKE_PREFIX_PATH
     "$ENV{Qt_DIR}"
 )
 
-find_package(Qt6 COMPONENTS Core Quick Qml Widgets Multimedia REQUIRED)
+find_package(Qt6 COMPONENTS Core Quick Qml Widgets Multimedia QuickControls2 REQUIRED)
 message(STATUS "Found Qt6: ${Qt6_VERSION} at ${Qt6_DIR}")
 
 # ── FFmpeg (optional — enables real frame decode) ─────────────────────────────
@@ -79,6 +79,7 @@ target_link_libraries(LavaLyrics PRIVATE
     Qt6::Qml
     Qt6::Widgets
     Qt6::Multimedia
+    Qt6::QuickControls2
 )
 
 if(LAVA_USE_FFMPEG AND FFMPEG_FOUND)

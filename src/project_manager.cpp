@@ -4,9 +4,13 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QFileInfo>
+#include <QDir>
 #include <QSettings>
 #include <QDateTime>
 #include <QDebug>
+#include <QGuiApplication>
+#include <QClipboard>
+#include <QStandardPaths>
 
 ProjectManager::ProjectManager(QObject *parent)
     : QObject(parent), m_isDirty(false)
@@ -17,10 +21,24 @@ QString ProjectManager::projectPath() const { return m_projectPath; }
 QString ProjectManager::projectName() const { return m_projectName; }
 bool ProjectManager::isDirty() const { return m_isDirty; }
 
-bool ProjectManager::newProject(const QString &name)
+bool ProjectManager::newProject(const QString &name, const QString &location, const QString &resolution)
 {
     m_projectName = name.isEmpty() ? "Nuevo Proyecto" : name;
-    m_projectPath.clear();
+    
+    // Crear el directorio del proyecto si no existe
+    QDir dir(location);
+    if (!dir.exists()) {
+        dir.mkpath(location);
+    }
+    
+    // Ruta final del archivo .llproj
+    QString filePath = location;
+    if (!filePath.endsWith("/") && !filePath.endsWith("\\")) {
+        filePath += "/";
+    }
+    filePath += m_projectName + ".llproj";
+    
+    m_projectPath = filePath;
     m_data.clear();
 
     // Initialize with defaults
@@ -31,13 +49,17 @@ bool ProjectManager::newProject(const QString &name)
     m_data["lyricsPath"]= "";
     m_data["tracks"]    = QVariantMap();
     m_data["exportSettings"] = QVariantMap{
-        {"resolution", "1080x1920"},
+        {"resolution", resolution},
         {"fps", 30},
         {"bitrate", "6000k"},
         {"format", "mp4"}
     };
 
     m_isDirty = false;
+    
+    // Guardar físicamente
+    saveProject(m_projectPath);
+    
     emit projectPathChanged();
     emit isDirtyChanged();
     return true;
@@ -51,9 +73,9 @@ bool ProjectManager::saveProject(const QString &path)
         return false;
     }
 
-    // Ensure .lavalyrics extension
-    if (!savePath.endsWith(".lavalyrics"))
-        savePath += ".lavalyrics";
+    // Ensure .llproj extension
+    if (!savePath.endsWith(".llproj"))
+        savePath += ".llproj";
 
     m_data["savedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
     m_data["name"]    = m_projectName;
@@ -129,6 +151,26 @@ QStringList ProjectManager::recentProjects() const
 {
     QSettings settings("LavaLyrics", "LavaLyrics");
     return settings.value("recentProjects").toStringList();
+}
+
+void ProjectManager::copyToClipboard(const QString &text) const
+{
+    if (QClipboard *clipboard = QGuiApplication::clipboard()) {
+        clipboard->setText(text);
+    }
+}
+
+QString ProjectManager::defaultDownloadsDir() const
+{
+    QString base = QStandardPaths::writableLocation(QStandardPaths::MusicLocation);
+    if (base.isEmpty())
+        base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (base.isEmpty())
+        base = QDir::homePath();
+
+    QString path = QDir(base).filePath("LavaLyrics");
+    QDir().mkpath(path);
+    return QDir::toNativeSeparators(path);
 }
 
 void ProjectManager::saveRecentProject(const QString &path)
