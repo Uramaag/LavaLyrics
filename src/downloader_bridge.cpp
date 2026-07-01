@@ -79,7 +79,14 @@ void DownloaderBridge::setPythonPath(const QString &path) { m_pythonPath = path;
 
 QString DownloaderBridge::detectPython()
 {
-    QStringList candidates = {"python", "python3", "py"};
+    QString appDir = QCoreApplication::applicationDirPath();
+    QStringList candidates = {
+        QDir(appDir).filePath("../venv/Scripts/python.exe"),
+        QDir(appDir).filePath("venv/Scripts/python.exe"),
+        QDir::current().filePath("venv/Scripts/python.exe"),
+        "python", "python3", "py"
+    };
+
     for (const QString &cmd : candidates) {
         QProcess probe;
         probe.start(cmd, {"--version"});
